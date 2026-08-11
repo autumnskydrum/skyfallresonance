@@ -8,7 +8,8 @@ export default defineConfig({
   migrations: {
     path: "prisma/migrations",
   },
+  // Prisma CLI(migrate 등)는 unpooled(direct) 연결이 필요 — 앱 런타임의 pooled DATABASE_URL과는 다른 값.
   datasource: {
-    url: process.env["DATABASE_URL"],
+    url: process.env["DIRECT_DATABASE_URL"],
   },
 });
