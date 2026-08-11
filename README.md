@@ -6,8 +6,10 @@
 
 - [Next.js](https://nextjs.org) (App Router, TypeScript)
 - [Tailwind CSS](https://tailwindcss.com)
-- [Prisma](https://www.prisma.io) 7 + [Prisma Postgres](https://www.prisma.io/postgres) (`@prisma/adapter-pg` 드라이버 어댑터 사용, 로컬·배포 동일 DB)
+- [Prisma](https://www.prisma.io) 7 + [Neon Postgres](https://neon.tech) (Vercel 마켓플레이스 연동으로 프로비저닝, `@prisma/adapter-pg` 드라이버 어댑터 사용, 로컬·배포 동일 DB)
 - 배포: [Vercel](https://vercel.com), 데이터 수집 스케줄러: [GitHub Actions](.github/workflows/collect-data.yml) (Vercel Hobby 크론은 하루 1회 제한이라 미채택)
+
+**실제 배포 URL:** https://autumnsky-blog.vercel.app
 
 ## 시작하기
 
@@ -40,15 +42,17 @@ npx prisma generate        # 스키마 변경 후 Prisma Client 재생성만 필
 ### 환경변수
 
 ```env
-DATABASE_URL=                # Prisma Postgres 연결 문자열 — pooled (pooled.db.prisma.io), 앱 런타임용
-DIRECT_DATABASE_URL=          # Prisma Postgres 연결 문자열 — direct (db.prisma.io), prisma migrate/CLI 전용
+DATABASE_URL=                # Neon 연결 문자열 — pooled, 앱 런타임용
+DIRECT_DATABASE_URL=          # Neon 연결 문자열 — unpooled(DATABASE_URL_UNPOOLED), prisma migrate/CLI 전용
 KMA_API_KEY=                   # https://www.data.go.kr/data/15084084/openapi.do 에서 발급받은 "Encoding" 값 그대로 저장 (재인코딩 금지)
 WEATHERAPI_KEY=                 # https://www.weatherapi.com 에서 무료 가입 후 발급
 NEWS_CRAWL_SECRET=               # /api/news/crawl 호출 인증용 (Authorization: Bearer <값>)
 WEATHER_COLLECT_SECRET=           # /api/weather/collect 호출 인증용
 ```
 
-⚠️ `DATABASE_URL`은 반드시 **pooled** 연결 문자열이어야 한다. direct 연결 문자열을 넣으면 로컬(`next dev`/`next start`)에서는 멀쩡히 되다가 Vercel 배포에서만 모든 DB 관련 페이지가 500 에러가 난다 — 자세한 내용은 [CLAUDE.md](./CLAUDE.md)의 "Pooled vs direct" 항목 참고.
+⚠️ `DATABASE_URL`은 반드시 **pooled** 연결 문자열이어야 한다. direct/unpooled 연결 문자열을 넣으면 로컬(`next dev`/`next start`)에서는 멀쩡히 되다가 Vercel 배포에서만 모든 DB 관련 페이지가 500 에러가 난다 — 자세한 내용은 [CLAUDE.md](./CLAUDE.md)의 "Pooled vs direct" 및 "Deployment postmortem" 항목 참고.
+
+⚠️ Vercel에 시크릿을 등록할 때 `vercel env add`에 값을 **PowerShell 파이프로 넘기면 값이 깨진다** (CLI는 성공했다고 표시하지만 실제로는 인증 실패). 반드시 Bash에서 `printf '%s' '<값>' | vercel env add <이름> <환경>` 형태로 등록할 것.
 
 `NEWS_CRAWL_SECRET`, `WEATHER_COLLECT_SECRET`은 GitHub Actions 저장소 시크릿에도 동일한 값으로 등록되어 있어야 스케줄러가 인증을 통과한다 (`gh secret set`).
 
