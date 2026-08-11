@@ -34,7 +34,7 @@ npx prisma generate        # 스키마 변경 후 Prisma Client 재생성만 필
 
 - 게시판(`/posts`), 묻고 답하기(`/qna`), 주요뉴스(`/news`): DB 스키마와 목록 조회 페이지만 구현됨. 글쓰기/답변 작성 등 쓰기 기능과 인증은 아직 없음.
 - 뉴스 크롤링: `src/app/api/news/crawl/route.ts`에 진입점만 마련되어 있고, 실제 크롤링 로직(`fetchLatestArticles`)은 미구현. 외부 스케줄러(Vercel Cron, GitHub Actions 등)가 주기적으로 이 엔드포인트를 호출하는 구조를 전제로 함.
-- 날씨(`/weather`): Open-Meteo, MET Norway, SMHI(북유럽 지역만), 기상청(한국만, `KMA_API_KEY` 필요) 4개 소스가 실제 API 호출로 동작 확인됨. WeatherAPI.com은 코드는 완성되어 있으나 키가 없어 비활성 상태 — 아래 "날씨 API 키 설정" 참고.
+- 날씨(`/weather`): **5개 소스(Open-Meteo, MET Norway, SMHI(북유럽만), 기상청(한국만), WeatherAPI.com) 모두 실제 API 호출로 동작 확인됨.** 서울 기준 예: Open-Meteo 30.8°C, MET Norway, 기상청 32.0°C·맑음, WeatherAPI.com 31.2°C·Overcast.
 
 ### 날씨 API 키 설정
 
