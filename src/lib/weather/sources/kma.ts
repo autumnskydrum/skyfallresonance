@@ -1,4 +1,4 @@
-import type { CityTarget, WeatherReadingResult } from "../types";
+import type { CityTarget, DailyForecastResult, WeatherReadingResult } from "../types";
 
 // 기상청 단기예보 조회서비스(초단기실황, getUltraSrtNcst) — data.go.kr(15084084)에서 발급받은
 // 서비스키가 필요하다. https://www.data.go.kr/data/15084084/openapi.do
@@ -57,6 +57,127 @@ export async function fetchKma(
     condition: ptyItem ? describePty(Number(ptyItem.obsrValue)) : undefined,
     observedAt: kstToDate(baseDate, baseTime),
   };
+}
+
+const VILAGE_FCST_URL =
+  "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst";
+
+// 단기예보(getVilageFcst) — data.go.kr 15084084에서 초단기실황과 별개로 추가 등록이 필요한
+// 오퍼레이션이다. 현재 키는 초단기실황(getUltraSrtNcst)만 등록되어 있어 SERVICE_KEY_IS_NOT_REGISTERED_ERROR가
+// 나는 상태로 확인됨(2026-08-11) — data.go.kr 마이페이지에서 getVilageFcst 오퍼레이션을 추가 신청하면
+// 코드 변경 없이 바로 동작한다. 그 전까지는 다른 실패와 동일하게 조용히 빈 배열을 반환한다.
+//
+// 단기예보는 3시간 간격(0200/0500/0800/1100/1400/1700/2000/2300 발표, 약 10분 후 제공)으로
+// 앞으로 약 2~3일치 기온(TMP)을 준다. TMN/TMX(일 최저/최고)는 특정 발표시각에만 포함되는 경우가 있어
+// 신뢰성 있게 매일 최고/최저를 뽑기 위해 그날의 TMP 전체에서 직접 min/max를 계산한다.
+export async function fetchKmaDaily(city: CityTarget): Promise<DailyForecastResult[]> {
+  const apiKey = process.env.KMA_API_KEY;
+  if (!apiKey) return [];
+
+  const { nx, ny } = toKmaGrid(city.lat, city.lon);
+  const { baseDate, baseTime } = getVilageFcstBaseDateTime(new Date());
+
+  const url =
+    `${VILAGE_FCST_URL}?serviceKey=${apiKey}` +
+    `&pageNo=1&numOfRows=1000&dataType=JSON` +
+    `&base_date=${baseDate}&base_time=${baseTime}` +
+    `&nx=${nx}&ny=${ny}`;
+
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) return [];
+
+  let data: {
+    response?: {
+      header?: { resultCode?: string };
+      body?: {
+        items?: {
+          item?: Array<{ category: string; fcstDate: string; fcstTime: string; fcstValue: string }>;
+        };
+      };
+    };
+  };
+  try {
+    data = await res.json();
+  } catch {
+    return [];
+  }
+
+  if (data.response?.header?.resultCode !== "00") return [];
+
+  const items = data.response?.body?.items?.item;
+  if (!Array.isArray(items)) return [];
+
+  type DateBucket = {
+    temps: number[];
+    skyByTime: Map<string, number>;
+    ptyByTime: Map<string, number>;
+  };
+  const byDate = new Map<string, DateBucket>();
+  for (const item of items) {
+    const bucket: DateBucket = byDate.get(item.fcstDate) ?? {
+      temps: [],
+      skyByTime: new Map(),
+      ptyByTime: new Map(),
+    };
+    if (item.category === "TMP") bucket.temps.push(Number(item.fcstValue));
+    if (item.category === "SKY") bucket.skyByTime.set(item.fcstTime, Number(item.fcstValue));
+    if (item.category === "PTY") bucket.ptyByTime.set(item.fcstTime, Number(item.fcstValue));
+    byDate.set(item.fcstDate, bucket);
+  }
+
+  return Array.from(byDate.entries())
+    .filter(([, bucket]) => bucket.temps.length > 0)
+    .map(([fcstDate, bucket]) => {
+      const pty = bucket.ptyByTime.get("1200") ?? bucket.ptyByTime.values().next().value;
+      const sky = bucket.skyByTime.get("1200") ?? bucket.skyByTime.values().next().value;
+      return {
+        date: kstDateOnly(fcstDate),
+        tempMaxC: Math.max(...bucket.temps),
+        tempMinC: Math.min(...bucket.temps),
+        condition: describeSkyPty(sky, pty),
+      };
+    });
+}
+
+// 단기예보는 3시간 간격(0200~2300, 8회)으로 발표되며 약 10분 후 제공된다.
+// 현재 KST 기준 가장 최근에 지난 발표시각을 base_time으로 사용한다.
+function getVilageFcstBaseDateTime(now: Date): { baseDate: string; baseTime: string } {
+  const ANNOUNCE_HOURS = [2, 5, 8, 11, 14, 17, 20, 23];
+  const kstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  const nowMinutes = kstNow.getUTCHours() * 60 + kstNow.getUTCMinutes();
+
+  let hour = ANNOUNCE_HOURS[0];
+  let dayOffset = -1; // 다음날 02:10 이전이면 전날 23시 발표를 사용
+  for (const h of ANNOUNCE_HOURS) {
+    if (nowMinutes >= h * 60 + 10) {
+      hour = h;
+      dayOffset = 0;
+    }
+  }
+
+  const base = new Date(
+    Date.UTC(kstNow.getUTCFullYear(), kstNow.getUTCMonth(), kstNow.getUTCDate() + dayOffset, hour)
+  );
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const baseDate = `${base.getUTCFullYear()}${pad(base.getUTCMonth() + 1)}${pad(base.getUTCDate())}`;
+  const baseTime = `${pad(base.getUTCHours())}00`;
+  return { baseDate, baseTime };
+}
+
+function kstDateOnly(fcstDate: string): Date {
+  const year = Number(fcstDate.slice(0, 4));
+  const month = Number(fcstDate.slice(4, 6));
+  const day = Number(fcstDate.slice(6, 8));
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+// 기상청 SKY(하늘상태) + PTY(강수형태) 코드 조합 요약
+function describeSkyPty(sky: number | undefined, pty: number | undefined): string | undefined {
+  if (pty) return describePty(pty);
+  if (sky === 1) return "맑음";
+  if (sky === 3) return "구름 많음";
+  if (sky === 4) return "흐림";
+  return undefined;
 }
 
 // 초단기실황은 매시 40분에 그 시각 관측자료가 갱신된다.

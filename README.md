@@ -37,7 +37,7 @@ npx prisma generate        # 스키마 변경 후 Prisma Client 재생성만 필
 
 - 게시판(`/posts`), 묻고 답하기(`/qna`), 주요뉴스(`/news`): DB 스키마와 목록 조회 페이지만 구현됨. 글쓰기/답변 작성 등 쓰기 기능과 인증은 아직 없음.
 - 뉴스 크롤링: `src/app/api/news/crawl/route.ts`에 진입점만 마련되어 있고, 실제 크롤링 로직(`fetchLatestArticles`)은 미구현. `.github/workflows/collect-data.yml`이 매시 정각 이 엔드포인트를 호출함(스텁이라 아직 실질적 효과 없음).
-- 날씨(`/weather`): **5개 소스(Open-Meteo, MET Norway, SMHI(북유럽만), 기상청(한국만), WeatherAPI.com) 모두 실제 API 호출로 동작 확인됨.** 서울 기준 예: Open-Meteo 30.8°C, MET Norway, 기상청 32.0°C·맑음, WeatherAPI.com 31.2°C·Overcast.
+- 날씨(`/weather`): 현재 날씨(5개 소스)에 더해 **7일 예보**도 제공. Open-Meteo/MET Norway/SMHI/WeatherAPI.com은 실제 동작 확인됨. 기상청(단기예보)만 예외 — data.go.kr에서 `getVilageFcst` 오퍼레이션 추가 등록이 필요해서 현재는 빈 값 반환 중(등록하면 코드 변경 없이 바로 활성화됨, 자세한 내용은 CLAUDE.md 참고).
 
 ### 환경변수
 

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireBearerAuth, tallySettled } from "@/lib/auth";
 import { TRACKED_CITIES } from "@/lib/weather/cities";
-import { fetchAllSources } from "@/lib/weather/sources";
+import { fetchAllDailySources, fetchAllSources } from "@/lib/weather/sources";
 import type { CityTarget } from "@/lib/weather/types";
 
 // 기상 데이터 수집 엔트리 포인트.
@@ -15,31 +15,63 @@ import type { CityTarget } from "@/lib/weather/types";
 const CONCURRENCY = 5;
 
 async function collectCity(city: CityTarget) {
-  const readings = await fetchAllSources(city);
+  const [readings, dailyBySource] = await Promise.all([
+    fetchAllSources(city),
+    fetchAllDailySources(city),
+  ]);
 
-  const results = await Promise.allSettled(
-    Object.entries(readings).map(([source, reading]) =>
-      prisma.weatherReading.upsert({
-        where: { citySlug_source: { citySlug: city.slug, source } },
+  const currentUpserts = Object.entries(readings).map(([source, reading]) =>
+    prisma.weatherReading.upsert({
+      where: { citySlug_source: { citySlug: city.slug, source } },
+      create: {
+        citySlug: city.slug,
+        cityName: city.name,
+        countryCode: city.countryCode,
+        source,
+        temperatureC: reading.temperatureC,
+        condition: reading.condition,
+        observedAt: reading.observedAt,
+      },
+      update: {
+        temperatureC: reading.temperatureC,
+        condition: reading.condition,
+        observedAt: reading.observedAt,
+        fetchedAt: new Date(),
+      },
+    })
+  );
+
+  const dailyUpserts = Object.entries(dailyBySource).flatMap(([source, days]) =>
+    days.map((day) =>
+      prisma.weatherDailyForecast.upsert({
+        where: {
+          citySlug_source_forecastDate: {
+            citySlug: city.slug,
+            source,
+            forecastDate: day.date,
+          },
+        },
         create: {
           citySlug: city.slug,
           cityName: city.name,
           countryCode: city.countryCode,
           source,
-          temperatureC: reading.temperatureC,
-          condition: reading.condition,
-          observedAt: reading.observedAt,
+          forecastDate: day.date,
+          tempMaxC: day.tempMaxC,
+          tempMinC: day.tempMinC,
+          condition: day.condition,
         },
         update: {
-          temperatureC: reading.temperatureC,
-          condition: reading.condition,
-          observedAt: reading.observedAt,
+          tempMaxC: day.tempMaxC,
+          tempMinC: day.tempMinC,
+          condition: day.condition,
           fetchedAt: new Date(),
         },
       })
     )
   );
 
+  const results = await Promise.allSettled([...currentUpserts, ...dailyUpserts]);
   return tallySettled(results);
 }
 

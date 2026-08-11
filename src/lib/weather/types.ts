@@ -18,3 +18,10 @@ export type WeatherReadingResult = {
   condition?: string;
   observedAt: Date;
 };
+
+export type DailyForecastResult = {
+  date: Date; // 자정(UTC) 기준 날짜
+  tempMaxC: number;
+  tempMinC: number;
+  condition?: string;
+};

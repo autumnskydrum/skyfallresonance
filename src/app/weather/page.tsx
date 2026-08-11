@@ -10,10 +10,17 @@ export default async function WeatherPage() {
   const countryCode = await detectCountryCode();
   const city = cityForCountry(countryCode);
 
-  const readings = await prisma.weatherReading.findMany({
-    where: { citySlug: city.slug },
-    orderBy: { source: "asc" },
-  });
+  const [readings, dailyForecasts] = await Promise.all([
+    prisma.weatherReading.findMany({
+      where: { citySlug: city.slug },
+      orderBy: { source: "asc" },
+    }),
+    prisma.weatherDailyForecast.findMany({
+      where: { citySlug: city.slug },
+      orderBy: [{ forecastDate: "asc" }, { source: "asc" }],
+      take: 40,
+    }),
+  ]);
 
   return (
     <PageContainer>
@@ -26,6 +33,12 @@ export default async function WeatherPage() {
         <EmptyState message="아직 수집된 날씨 데이터가 없습니다." />
       ) : (
         <WeatherSummary readings={readings} />
+      )}
+
+      {dailyForecasts.length === 0 ? (
+        <EmptyState message="아직 수집된 주간 예보가 없습니다." />
+      ) : (
+        <WeeklyForecast forecasts={dailyForecasts} />
       )}
     </PageContainer>
   );
@@ -60,6 +73,72 @@ function WeatherSummary({
             <span>
               {r.temperatureC.toFixed(1)}°C{r.condition ? ` · ${r.condition}` : ""}
             </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function WeeklyForecast({
+  forecasts,
+}: {
+  forecasts: {
+    forecastDate: Date;
+    source: string;
+    tempMaxC: number;
+    tempMinC: number;
+    condition: string | null;
+  }[];
+}) {
+  const byDate = new Map<string, typeof forecasts>();
+  for (const f of forecasts) {
+    const key = f.forecastDate.toISOString().slice(0, 10);
+    const bucket = byDate.get(key) ?? [];
+    bucket.push(f);
+    byDate.set(key, bucket);
+  }
+
+  const days = Array.from(byDate.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(0, 7)
+    .map(([dateKey, entries]) => {
+      const maxes = entries.map((e) => e.tempMaxC);
+      const mins = entries.map((e) => e.tempMinC);
+      const condition = entries.find((e) => e.condition)?.condition;
+      return {
+        dateKey,
+        weekday: new Date(`${dateKey}T00:00:00Z`).toLocaleDateString("ko-KR", {
+          weekday: "short",
+          timeZone: "UTC",
+        }),
+        tempMax: maxes.reduce((sum, t) => sum + t, 0) / maxes.length,
+        tempMin: mins.reduce((sum, t) => sum + t, 0) / mins.length,
+        condition,
+        sourceCount: entries.length,
+      };
+    });
+
+  return (
+    <div className={CARD_CLASS}>
+      <h2 className="border-b border-black/[.08] p-4 text-sm font-medium dark:border-white/[.145]">
+        7일 예보
+      </h2>
+      <ul className="grid grid-cols-3 divide-y divide-black/[.08] sm:grid-cols-7 sm:divide-y-0 dark:divide-white/[.145]">
+        {days.map((day) => (
+          <li
+            key={day.dateKey}
+            className="flex flex-col items-center gap-1 p-3 text-center text-sm"
+          >
+            <span className="font-medium">{day.weekday}</span>
+            {day.condition && (
+              <span className="text-xs text-zinc-500">{day.condition}</span>
+            )}
+            <span>
+              <span className="font-semibold">{Math.round(day.tempMax)}°</span>
+              <span className="text-zinc-500"> / {Math.round(day.tempMin)}°</span>
+            </span>
+            <span className="text-xs text-zinc-400">소스 {day.sourceCount}개</span>
           </li>
         ))}
       </ul>

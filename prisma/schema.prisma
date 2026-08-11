@@ -64,3 +64,20 @@ model WeatherReading {
 
   @@unique([citySlug, source])
 }
+
+// 7일 일별 예보 (최고/최저기온). 소스별 지원 기간이 달라 도시+소스+날짜 조합당
+// 최신 값 하나만 유지한다 — 지원 안 하는 미래 날짜는 그 소스만 자연스럽게 빠진다.
+model WeatherDailyForecast {
+  id           String   @id @default(cuid())
+  citySlug     String
+  cityName     String
+  countryCode  String
+  source       String
+  forecastDate DateTime
+  tempMaxC     Float
+  tempMinC     Float
+  condition    String?
+  fetchedAt    DateTime @default(now())
+
+  @@unique([citySlug, source, forecastDate])
+}

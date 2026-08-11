@@ -1,4 +1,4 @@
-import type { CityTarget, WeatherReadingResult } from "../types";
+import type { CityTarget, DailyForecastResult, WeatherReadingResult } from "../types";
 
 // 문서: https://www.weatherapi.com/docs/ — WEATHERAPI_KEY 환경변수 필요.
 // https://www.weatherapi.com 에서 무료 가입 후 발급.
@@ -21,4 +21,26 @@ export async function fetchWeatherApi(
     condition: current.condition?.text,
     observedAt: new Date(current.last_updated.replace(" ", "T")),
   };
+}
+
+export async function fetchWeatherApiDaily(
+  city: CityTarget
+): Promise<DailyForecastResult[]> {
+  const apiKey = process.env.WEATHERAPI_KEY;
+  if (!apiKey) return [];
+
+  const url = `https://api.weatherapi.com/v1/forecast.json?key=${apiKey}&q=${city.lat},${city.lon}&days=7`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) return [];
+
+  const data = await res.json();
+  const days = data.forecast?.forecastday;
+  if (!Array.isArray(days)) return [];
+
+  return days.map((d) => ({
+    date: new Date(d.date),
+    tempMaxC: d.day.maxtemp_c,
+    tempMinC: d.day.mintemp_c,
+    condition: d.day.condition?.text,
+  }));
 }
