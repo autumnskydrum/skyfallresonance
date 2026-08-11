@@ -33,6 +33,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <Link href="/posts">게시판</Link>
             <Link href="/qna">묻고 답하기</Link>
             <Link href="/news">주요뉴스</Link>
+            <Link href="/weather">날씨</Link>
           </nav>
         </header>
         <main className="flex flex-1 flex-col">{children}</main>

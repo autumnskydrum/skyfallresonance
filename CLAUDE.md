@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A Next.js (App Router, TypeScript, Tailwind) blog with three planned feature areas: a post board (게시판), Q&A (묻고 답하기), and crawled-news display (주요뉴스). The electricity bill calculator from [ElectricBillCalc](../ElectricBillCalc) is planned to be folded into this workspace later — it is not here yet.
+A Next.js (App Router, TypeScript, Tailwind) blog with four feature areas: a post board (게시판), Q&A (묻고 답하기), crawled-news display (주요뉴스), and a multi-source weather comparison dashboard (날씨). The electricity bill calculator from [ElectricBillCalc](../ElectricBillCalc) is planned to be folded into this workspace later — it is not here yet.
 
 Currently only read/list views exist for all three features; there is no auth, no write UI (posting/answering), and no real crawler implementation yet. See README.md's "구현 상태" section for the current state.
 
@@ -35,7 +35,13 @@ The generated Prisma client lives at `src/generated/prisma` (per the custom `out
 
 **News crawling:** `src/app/api/news/crawl/route.ts` is the intended entry point — a `POST` handler meant to be triggered by an external scheduler (Vercel Cron, GitHub Actions, etc.), not by users. It upserts articles into `NewsArticle` keyed on `url`. The actual fetch/parse logic belongs in `fetchLatestArticles()`, currently a stub returning `[]`. If a `NEWS_CRAWL_SECRET` env var is set, the route requires a matching `Authorization: Bearer <secret>` header — set this before exposing the route publicly.
 
-**Environment:** `DATABASE_URL` lives in `.env` (gitignored). `prisma.config.ts` loads it via `dotenv/config` — Prisma does not auto-load `.env` on its own in this version, so don't remove that import.
+**Weather dashboard:** `src/lib/weather/` holds the whole feature. `sources/*.ts` each export a `fetch<Source>(city): Promise<WeatherReadingResult | null>` with a uniform shape (`types.ts`); `sources/index.ts` fans out to all five concurrently via `fetchAllSources()` and swallows individual failures so one dead source never breaks the rest. `cities.ts` maps ISO country code → one tracked city (`TRACKED_CITIES`, `cityForCountry()`); add countries there as needed. `geo.ts` reads the `x-vercel-ip-country` header (set automatically by Vercel's edge, absent in local dev — falls back to `"KR"`) to pick which city a visitor sees.
+
+Source status: **Open-Meteo and MET Norway are fully implemented and need no API key.** **SMHI is fully implemented but only ever called for Nordic countries** (`isNordic()` in `cities.ts`) — outside Scandinavia it has no meaningful data, so `fetchSmhi()` short-circuits to `null` rather than wasting a call. Note SMHI replaced its `pmp3g` API with `snow1g`/v1 on 2026-03-31 with a different response shape (`data.air_temperature` instead of a `parameters` array) — if `fetchSmhi()` starts silently returning nothing, check whether SMHI changed its API again. **`fetchWeatherApi()` is fully implemented but inert until `WEATHERAPI_KEY` is set** (returns `null` otherwise). **`fetchKma()` is a stub returning `null`** — `toKmaGrid()` (the lat/lon → KMA grid-coordinate conversion) is implemented and correct, but the actual `data.go.kr` API call is deliberately left as a TODO in `kma.ts` because it couldn't be tested without a real key; follow the TODO comments there once `KMA_API_KEY` is set, and actually exercise the endpoint against real KMA responses before trusting it (data.go.kr APIs are notorious for XML-vs-JSON and encoding gotchas).
+
+Like news, collection is scheduler-driven, not per-request: `POST /api/weather/collect` iterates `TRACKED_CITIES`, calls `fetchAllSources()` for each, and upserts into `WeatherReading` (unique on `[citySlug, source]` — each collection cycle overwrites the prior reading rather than accumulating history). `/weather` only reads from the DB. Same optional bearer-token gate as news crawling, via `WEATHER_COLLECT_SECRET`. The page combines whatever sources returned data for that city into an average (shown large) plus a min–max range (shown as small secondary text/tooltip) — this compromise was chosen deliberately to keep the primary UI clean while not hiding source disagreement entirely; keep both when touching that UI, don't collapse it to a bare average.
+
+**Environment:** `DATABASE_URL` lives in `.env` (gitignored). `prisma.config.ts` loads it via `dotenv/config` — Prisma does not auto-load `.env` on its own in this version, so don't remove that import. Weather/news feature keys (`KMA_API_KEY`, `WEATHERAPI_KEY`, `NEWS_CRAWL_SECRET`, `WEATHER_COLLECT_SECRET`) also go in `.env`; see README's "날씨 API 키 설정" for where to obtain them.
 
 ## Conventions
 

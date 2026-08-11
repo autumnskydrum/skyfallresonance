@@ -16,13 +16,18 @@ const sections = [
     title: "주요뉴스",
     description: "자동 크롤링된 주요 뉴스",
   },
+  {
+    href: "/weather",
+    title: "날씨",
+    description: "여러 기상 소스를 비교한 예보",
+  },
 ];
 
 export default function Home() {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-16">
       <h1 className="text-2xl font-semibold">autumnsky-blog</h1>
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         {sections.map((s) => (
           <Link
             key={s.href}
