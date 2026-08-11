@@ -23,13 +23,18 @@ export async function fetchWeatherApi(
   };
 }
 
+// 무료 플랜은 3일까지만 보장된다. 가입 당일엔 트라이얼로 더 길게(최대 7일) 나오지만
+// 트라이얼이 끝나면 다운그레이드되므로, 트라이얼 기간에 맞춰 7을 요청하지 말고 항상
+// 실제 플랜 한도인 3으로 요청한다 — 트라이얼이 끝난 뒤 조용히 깨지는 것을 방지.
+const FREE_PLAN_DAYS = 3;
+
 export async function fetchWeatherApiDaily(
   city: CityTarget
 ): Promise<DailyForecastResult[]> {
   const apiKey = process.env.WEATHERAPI_KEY;
   if (!apiKey) return [];
 
-  const url = `https://api.weatherapi.com/v1/forecast.json?key=${apiKey}&q=${city.lat},${city.lon}&days=7`;
+  const url = `https://api.weatherapi.com/v1/forecast.json?key=${apiKey}&q=${city.lat},${city.lon}&days=${FREE_PLAN_DAYS}`;
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) return [];
 
