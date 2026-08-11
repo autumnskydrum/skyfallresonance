@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
+import { NAV_ITEMS } from "@/lib/nav";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -30,10 +31,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <Link href="/" className="font-semibold">
               autumnsky-blog
             </Link>
-            <Link href="/posts">게시판</Link>
-            <Link href="/qna">묻고 답하기</Link>
-            <Link href="/news">주요뉴스</Link>
-            <Link href="/weather">날씨</Link>
+            {NAV_ITEMS.map((item) => (
+              <Link key={item.href} href={item.href}>
+                {item.title}
+              </Link>
+            ))}
           </nav>
         </header>
         <main className="flex flex-1 flex-col">{children}</main>

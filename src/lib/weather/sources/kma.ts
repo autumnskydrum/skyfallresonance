@@ -12,7 +12,7 @@ export async function fetchKma(
   city: CityTarget
 ): Promise<WeatherReadingResult | null> {
   const apiKey = process.env.KMA_API_KEY;
-  if (!apiKey || city.countryCode !== "KR") return null;
+  if (!apiKey) return null;
 
   const { nx, ny } = toKmaGrid(city.lat, city.lon);
   const { baseDate, baseTime } = getUltraSrtNcstBaseDateTime(new Date());
@@ -67,22 +67,23 @@ function getUltraSrtNcstBaseDateTime(now: Date): {
   baseTime: string;
 } {
   const kstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-  let hour = kstNow.getUTCHours();
-  const date = new Date(
-    Date.UTC(kstNow.getUTCFullYear(), kstNow.getUTCMonth(), kstNow.getUTCDate())
+  const hourBucket = new Date(
+    Date.UTC(
+      kstNow.getUTCFullYear(),
+      kstNow.getUTCMonth(),
+      kstNow.getUTCDate(),
+      kstNow.getUTCHours()
+    )
   );
-
-  if (kstNow.getUTCMinutes() < 40) {
-    hour -= 1;
-    if (hour < 0) {
-      hour = 23;
-      date.setUTCDate(date.getUTCDate() - 1);
-    }
-  }
+  // 시각 뺄셈을 Date 타임스탬프 산술로 처리해 월/일 경계를 직접 다루지 않는다.
+  const base =
+    kstNow.getUTCMinutes() < 40
+      ? new Date(hourBucket.getTime() - 60 * 60 * 1000)
+      : hourBucket;
 
   const pad = (n: number) => String(n).padStart(2, "0");
-  const baseDate = `${date.getUTCFullYear()}${pad(date.getUTCMonth() + 1)}${pad(date.getUTCDate())}`;
-  const baseTime = `${pad(hour)}00`;
+  const baseDate = `${base.getUTCFullYear()}${pad(base.getUTCMonth() + 1)}${pad(base.getUTCDate())}`;
+  const baseTime = `${pad(base.getUTCHours())}00`;
   return { baseDate, baseTime };
 }
 
@@ -92,7 +93,6 @@ function kstToDate(baseDate: string, baseTime: string): Date {
   const day = Number(baseDate.slice(6, 8));
   const hour = Number(baseTime.slice(0, 2));
   const minute = Number(baseTime.slice(2, 4));
-  // KST = UTC+9 → UTC 시각으로 변환해서 저장
   return new Date(Date.UTC(year, month - 1, day, hour - 9, minute));
 }
 

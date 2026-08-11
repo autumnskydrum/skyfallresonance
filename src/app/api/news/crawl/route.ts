@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireBearerAuth, tallySettled } from "@/lib/auth";
 
 // 주요뉴스 크롤링 후 노출 기능의 진입점.
 // 외부 스케줄러(Vercel Cron, GitHub Actions 등)가 이 엔드포인트를 주기적으로 호출하는 것을 전제로 한다.
@@ -19,13 +20,8 @@ async function fetchLatestArticles(): Promise<CrawledArticle[]> {
 }
 
 export async function POST(request: Request) {
-  const secret = process.env.NEWS_CRAWL_SECRET;
-  if (secret) {
-    const auth = request.headers.get("authorization");
-    if (auth !== `Bearer ${secret}`) {
-      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    }
-  }
+  const unauthorized = requireBearerAuth(request, "NEWS_CRAWL_SECRET");
+  if (unauthorized) return unauthorized;
 
   const articles = await fetchLatestArticles();
 
@@ -39,6 +35,6 @@ export async function POST(request: Request) {
     )
   );
 
-  const saved = results.filter((r) => r.status === "fulfilled").length;
+  const { saved } = tallySettled(results);
   return NextResponse.json({ found: articles.length, saved });
 }

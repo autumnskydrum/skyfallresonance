@@ -1,6 +1,5 @@
 import type { CityTarget } from "./types";
 
-// 국가 코드(ISO 3166-1 alpha-2) → 주요 도시 1곳. 필요시 계속 추가 가능.
 const CITIES_BY_COUNTRY: Record<string, CityTarget> = {
   KR: { slug: "seoul-kr", name: "서울", countryCode: "KR", lat: 37.5665, lon: 126.978 },
   US: { slug: "new-york-us", name: "New York", countryCode: "US", lat: 40.7128, lon: -74.006 },
