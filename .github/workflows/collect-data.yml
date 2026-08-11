@@ -1,0 +1,30 @@
+name: Collect data
+
+# Vercel Hobby 플랜의 크론은 하루 1회로 제한되어 있어서, 대신 GitHub Actions로
+# 배포된 사이트의 수집 엔드포인트를 주기적으로 호출한다.
+# SITE_URL(repo variable)은 배포 후 실제 URL로 설정해야 동작한다.
+
+on:
+  schedule:
+    - cron: "*/30 * * * *" # 날씨: 30분마다
+    - cron: "0 * * * *" # 뉴스: 매시 정각
+  workflow_dispatch: {}
+
+jobs:
+  weather:
+    if: github.event.schedule == '*/30 * * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger weather collection
+        run: |
+          curl -sf -X POST "${{ vars.SITE_URL }}/api/weather/collect" \
+            -H "Authorization: Bearer ${{ secrets.WEATHER_COLLECT_SECRET }}"
+
+  news:
+    if: github.event.schedule == '0 * * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger news crawl
+        run: |
+          curl -sf -X POST "${{ vars.SITE_URL }}/api/news/crawl" \
+            -H "Authorization: Bearer ${{ secrets.NEWS_CRAWL_SECRET }}"

@@ -6,7 +6,8 @@
 
 - [Next.js](https://nextjs.org) (App Router, TypeScript)
 - [Tailwind CSS](https://tailwindcss.com)
-- [Prisma](https://www.prisma.io) 7 + SQLite (`@prisma/adapter-better-sqlite3` 드라이버 어댑터 사용, 로컬 개발용; 배포 시 Postgres 등으로 교체 가능)
+- [Prisma](https://www.prisma.io) 7 + [Prisma Postgres](https://www.prisma.io/postgres) (`@prisma/adapter-pg` 드라이버 어댑터 사용, 로컬·배포 동일 DB)
+- 배포: [Vercel](https://vercel.com), 데이터 수집 스케줄러: [GitHub Actions](.github/workflows/collect-data.yml) (Vercel Hobby 크론은 하루 1회 제한이라 미채택)
 
 ## 시작하기
 
@@ -33,23 +34,34 @@ npx prisma generate        # 스키마 변경 후 Prisma Client 재생성만 필
 ## 구현 상태
 
 - 게시판(`/posts`), 묻고 답하기(`/qna`), 주요뉴스(`/news`): DB 스키마와 목록 조회 페이지만 구현됨. 글쓰기/답변 작성 등 쓰기 기능과 인증은 아직 없음.
-- 뉴스 크롤링: `src/app/api/news/crawl/route.ts`에 진입점만 마련되어 있고, 실제 크롤링 로직(`fetchLatestArticles`)은 미구현. 외부 스케줄러(Vercel Cron, GitHub Actions 등)가 주기적으로 이 엔드포인트를 호출하는 구조를 전제로 함.
+- 뉴스 크롤링: `src/app/api/news/crawl/route.ts`에 진입점만 마련되어 있고, 실제 크롤링 로직(`fetchLatestArticles`)은 미구현. `.github/workflows/collect-data.yml`이 매시 정각 이 엔드포인트를 호출함(스텁이라 아직 실질적 효과 없음).
 - 날씨(`/weather`): **5개 소스(Open-Meteo, MET Norway, SMHI(북유럽만), 기상청(한국만), WeatherAPI.com) 모두 실제 API 호출로 동작 확인됨.** 서울 기준 예: Open-Meteo 30.8°C, MET Norway, 기상청 32.0°C·맑음, WeatherAPI.com 31.2°C·Overcast.
 
-### 날씨 API 키 설정
-
-`/api/weather/collect`를 호출하면 접속 국가별 주요 도시의 날씨를 5개 소스에서 모아 DB에 저장하고, `/weather`는 그 값의 평균·범위를 보여준다. `.env`에 키를 추가하면 코드 수정 없이 해당 소스가 자동으로 활성화된다:
+### 환경변수
 
 ```env
-KMA_API_KEY=       # https://www.data.go.kr/data/15084084/openapi.do 에서 발급받은 "Encoding" 값 그대로 저장 (재인코딩 금지)
-WEATHERAPI_KEY=     # https://www.weatherapi.com 에서 무료 가입 후 발급
-WEATHER_COLLECT_SECRET=   # 선택. 설정 시 /api/weather/collect 호출에 Authorization: Bearer <값> 필요
+DATABASE_URL=              # Prisma Postgres 연결 문자열
+KMA_API_KEY=                # https://www.data.go.kr/data/15084084/openapi.do 에서 발급받은 "Encoding" 값 그대로 저장 (재인코딩 금지)
+WEATHERAPI_KEY=              # https://www.weatherapi.com 에서 무료 가입 후 발급
+NEWS_CRAWL_SECRET=            # /api/news/crawl 호출 인증용 (Authorization: Bearer <값>)
+WEATHER_COLLECT_SECRET=        # /api/weather/collect 호출 인증용
 ```
+
+`NEWS_CRAWL_SECRET`, `WEATHER_COLLECT_SECRET`은 GitHub Actions 저장소 시크릿에도 동일한 값으로 등록되어 있어야 스케줄러가 인증을 통과한다 (`gh secret set`).
 
 로컬에서 수집을 수동으로 트리거하려면:
 
 ```bash
 curl -X POST http://localhost:3000/api/weather/collect
+curl -X POST http://localhost:3000/api/news/crawl
+```
+
+### 배포
+
+Vercel에 배포하고, 아래 환경변수를 Vercel 프로젝트 설정에도 동일하게 등록해야 한다. 배포 URL이 정해지면 GitHub Actions가 그 URL을 호출할 수 있도록 저장소 변수(`SITE_URL`)를 업데이트해야 한다:
+
+```bash
+gh variable set SITE_URL --body "https://<실제-배포-도메인>"
 ```
 
 자세한 아키텍처는 [CLAUDE.md](./CLAUDE.md) 참고.
