@@ -174,11 +174,11 @@ export function WeatherDashboard({
 
       {byDate.size > 0 && (
         <div className={CARD_CLASS}>
-          <ul className="grid grid-cols-4 divide-y divide-black/[.08] sm:grid-cols-8 sm:divide-y-0 dark:divide-white/[.145]">
+          <ul className="grid grid-cols-3 divide-y divide-black/[.08] sm:grid-cols-7 sm:divide-y-0 dark:divide-white/[.145]">
             {weekKeys.map((key) => {
               const rows = byDate.get(key);
               const isToday = key === todayKey;
-              const label = dayLabel(key, weekKeys[0], todayKey);
+              const label = dayLabel(key, todayKey);
 
               if (!rows) {
                 return (
@@ -353,9 +353,8 @@ function monthDayLabel(dateKey: string): string {
   return `${month}월 ${day}일`;
 }
 
-// 이번주 예보 카드의 요일 라벨: 첫 칸(어제)·둘째 칸(오늘)은 상대 표현을, 나머지는 요일 이름을 쓴다.
-function dayLabel(dateKey: string, yesterdayKey: string, todayKey: string): string {
-  if (dateKey === yesterdayKey) return "어제";
+// 이번주 예보 카드의 요일 라벨: 첫 칸(오늘)만 상대 표현을, 나머지는 요일 이름을 쓴다.
+function dayLabel(dateKey: string, todayKey: string): string {
   if (dateKey === todayKey) return "오늘";
   return weekdayShort(dateKey);
 }

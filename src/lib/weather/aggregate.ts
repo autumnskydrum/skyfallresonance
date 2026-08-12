@@ -58,15 +58,15 @@ export function hourlyRetentionWindow(
   return { start, end: new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000) };
 }
 
-// 이번주 예보 카드가 보여주는 8일(어제~오늘+6일)의 날짜 키. 실제 UTC 시각으로 바꾸지 않고 순수
+// 이번주 예보 카드가 보여주는 7일(오늘~오늘+6일)의 날짜 키. 실제 UTC 시각으로 바꾸지 않고 순수
 // 달력 날짜로만 계산한다 — UTC로 변환된 시각의 ISO 문자열을 잘라내면(예: 서울 자정은 전날 UTC
-// 15시) 도시에 따라 하루 밀린 날짜가 나오는 버그가 생기기 때문이다. 어제는 늘 데이터가 없는
-// 자리표시자로 나오지만(과거 실측을 주는 소스가 없다), 카드에 "어제" 라벨을 넣기 위해 포함한다.
+// 15시) 도시에 따라 하루 밀린 날짜가 나오는 버그가 생기기 때문이다. 어제는 넣지 않는다 — 과거
+// 실측을 주는 소스가 없어 항상 빈 자리표시자만 나오므로 의미가 없다는 피드백으로 뺐다.
 export function weekDateKeys(timeZone: string, now: Date = new Date()): string[] {
   const [year, month, day] = localDateParts(timeZone, now);
-  const yesterday = Date.UTC(year, month - 1, day - 1);
-  return Array.from({ length: 8 }, (_, i) =>
-    new Date(yesterday + i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const today = Date.UTC(year, month - 1, day);
+  return Array.from({ length: 7 }, (_, i) =>
+    new Date(today + i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
   );
 }
 
