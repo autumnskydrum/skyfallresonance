@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireBearerAuth, tallySettled } from "@/lib/auth";
-import { localDayBounds } from "@/lib/weather/aggregate";
+import { hourlyRetentionWindow } from "@/lib/weather/aggregate";
 import { TRACKED_CITIES } from "@/lib/weather/cities";
 import {
   fetchAllDailySources,
@@ -105,12 +105,13 @@ async function collectCity(city: CityTarget) {
     )
   );
 
-  // 시간별 예보는 매 수집 주기마다 "오늘"을 기준으로 창이 굴러가 unique 키(citySlug+source+forecastHour)가
-  // 계속 새로 생긴다 — WeatherReading/WeatherDailyForecast처럼 같은 키를 덮어쓰며 자연스럽게 정리되지 않으므로,
-  // "오늘" 구간(todayHours()가 쓰는 것과 동일한 로컬 자정~자정 경계) 밖의 행은 여기서 직접 지운다.
-  // 지난 시각뿐 아니라 미래 쪽도 지워야 한다: 예전엔 "지금 → +24시간" 창이라 내일 새벽까지 저장했는데,
-  // 지금은 "오늘 하루"만 저장하므로 그 이전 방식이 남긴 내일 쪽 잔여 행도 정리 대상이다.
-  const { start, end } = localDayBounds(city.timeZone);
+  // 시간별 예보는 매 수집 주기마다 "오늘~이번 주 끝"을 기준으로 창이 굴러가 unique 키
+  // (citySlug+source+forecastHour)가 계속 새로 생긴다 — WeatherReading/WeatherDailyForecast처럼
+  // 같은 키를 덮어쓰며 자연스럽게 정리되지 않으므로, weekHours()가 쓰는 것과 동일한 경계
+  // (hourlyRetentionWindow) 밖의 행은 여기서 직접 지운다. 지난 시각뿐 아니라 다음 주로 넘어간
+  // 시각도 지워야 한다 — 그렇지 않으면 이 창이 좁아지는 방향으로 바뀔 때마다 이전 방식이 남긴
+  // 잔여 행이 계속 쌓인다.
+  const { start, end } = hourlyRetentionWindow(city.timeZone);
   await prisma.weatherHourlyForecast.deleteMany({
     where: {
       citySlug: city.slug,

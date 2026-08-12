@@ -1,4 +1,4 @@
-import { todayHours } from "../aggregate";
+import { weekHours } from "../aggregate";
 import type {
   CityTarget,
   DailyForecastResult,
@@ -58,10 +58,12 @@ export async function fetchOpenMeteoDaily(
 export async function fetchOpenMeteoHourly(
   city: CityTarget
 ): Promise<HourlyForecastResult[]> {
-  // timezone=UTC + past_days=1&forecast_days=2: 도시의 로컬 하루(00시~24시)는 UTC 오프셋에 따라
-  // UTC 기준으로는 최대 이틀에 걸쳐 있을 수 있으므로(예: 서울 00시 KST = 전날 15시 UTC), 앞뒤로
-  // 하루씩 여유를 두고 받아온 뒤 todayHours()가 도시 로컬 기준 정확한 구간만 잘라낸다.
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&hourly=temperature_2m,weather_code&timezone=UTC&past_days=1&forecast_days=2`;
+  // timezone=UTC + past_days=1&forecast_days=9: weekHours()가 필요로 하는 구간은 "오늘부터 이번 주
+  // 끝(다음 월요일 자정)까지"로 도시 로컬 기준 최대 7일치인데, UTC 오프셋 때문에 이 구간이 실제
+  // UTC 달력으로는 최대 8~9일에 걸칠 수 있다(예: 서울 자정 = 전날 15시 UTC). 넉넉히 앞뒤로 받아온 뒤
+  // weekHours()가 도시 로컬 기준 정확한 구간만 잘라낸다. Open-Meteo는 forecast_days 최대 16이라
+  // 9는 여유 있게 안전하다.
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&hourly=temperature_2m,weather_code&timezone=UTC&past_days=1&forecast_days=9`;
 
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) return [];
@@ -78,7 +80,7 @@ export async function fetchOpenMeteoHourly(
     })
   );
 
-  return todayHours(points, city);
+  return weekHours(points, city);
 }
 
 // https://open-meteo.com/en/docs 의 WMO Weather interpretation codes 요약

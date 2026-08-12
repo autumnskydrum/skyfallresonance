@@ -1,4 +1,4 @@
-import { aggregateDailyFromHourly, todayHours } from "../aggregate";
+import { aggregateDailyFromHourly, weekHours } from "../aggregate";
 import { isNordic } from "../cities";
 import type {
   CityTarget,
@@ -109,7 +109,7 @@ export async function fetchSmhiHourly(
     })
     .filter((p): p is NonNullable<typeof p> => p !== null);
 
-  return todayHours(points, city);
+  return weekHours(points, city);
 }
 
 // SMHI symbol_code 요약: https://opendata.smhi.se/apidocs/metfcst/parameters.html

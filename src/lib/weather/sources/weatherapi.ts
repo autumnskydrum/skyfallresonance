@@ -1,4 +1,4 @@
-import { todayHours } from "../aggregate";
+import { weekHours } from "../aggregate";
 import type {
   CityTarget,
   DailyForecastResult,
@@ -62,15 +62,16 @@ export async function fetchWeatherApiDaily(
   }));
 }
 
-// days=1: forecastday[0].hour가 오늘 00:00~23:00 전체를(이미 지난 시각 포함) 준다 —
-// todayHours()가 필요한 구간이 정확히 이것이다.
+// days=FREE_PLAN_DAYS: 무료 플랜 한도까지 최대한(오늘 포함 3일) 받아온다 — 매일 예보와 같은 이유로
+// 트라이얼 기간에 더 길게 나오는 값에 의존하지 않는다. weekHours()가 이번 주 끝까지의 범위로
+// 다시 자르므로, 이번 주 나머지 요일(4일 이상 남았다면)은 이 소스가 자연스럽게 빠진다.
 export async function fetchWeatherApiHourly(
   city: CityTarget
 ): Promise<HourlyForecastResult[]> {
   const apiKey = process.env.WEATHERAPI_KEY;
   if (!apiKey) return [];
 
-  const url = `https://api.weatherapi.com/v1/forecast.json?key=${apiKey}&q=${city.lat},${city.lon}&days=1&lang=ko`;
+  const url = `https://api.weatherapi.com/v1/forecast.json?key=${apiKey}&q=${city.lat},${city.lon}&days=${FREE_PLAN_DAYS}&lang=ko`;
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) return [];
 
@@ -89,5 +90,5 @@ export async function fetchWeatherApiHourly(
       }))
   );
 
-  return todayHours(points, city);
+  return weekHours(points, city);
 }

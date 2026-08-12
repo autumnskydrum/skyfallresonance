@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CARD_CLASS } from "@/components/page";
+import { weekDateKeys } from "@/lib/weather/aggregate";
 import { sourceLabel } from "@/lib/weather/sources";
 
 type Reading = { source: string; temperatureC: number; condition: string | null };
@@ -19,10 +20,9 @@ type DailyRow = {
   condition: string | null;
 };
 
-type Selection = { type: "hour"; key: string } | { type: "day"; key: string } | null;
-
-// 현재 날씨 카드, 오늘 시간별 스트립, 이번주 예보를 한 컴포넌트로 묶은 이유: 시간대나 요일을
-// 클릭하면 맨 위 요약 카드가 그 시각/그날의 예보로 바뀌어야 해서 세 영역이 선택 상태를 공유해야 한다.
+// 현재 날씨 카드, 시간별 스트립, 이번주 예보를 한 컴포넌트로 묶은 이유: 요일을 클릭하면 시간별
+// 스트립이 그날 것으로 바뀌고 맨 위 요약 카드도 그날/그 시각의 예보로 바뀌어야 해서 세 영역이
+// 선택 상태(selectedDay, selectedHour)를 공유해야 한다.
 export function WeatherDashboard({
   currentReadings,
   hourlyForecasts,
@@ -34,17 +34,30 @@ export function WeatherDashboard({
   dailyForecasts: DailyRow[];
   timeZone: string;
 }) {
-  const [selection, setSelection] = useState<Selection>(null);
+  const now = new Date();
+  const todayKey = localDateKey(timeZone, now);
+  const weekKeys = weekDateKeys(timeZone, now);
+
+  // selectedDay는 항상 구체적인 날짜 키다(null="선택 안 함" 상태를 따로 두지 않음) — 기본값이
+  // 오늘이라 "오늘 카드를 다시 누르면 오늘로 돌아온다"는 동작이 자연스럽게 나온다.
+  const [selectedDay, setSelectedDay] = useState(todayKey);
+  const [selectedHour, setSelectedHour] = useState<string | null>(null);
+  const listRef = useRef<HTMLUListElement>(null);
   const nowButtonRef = useRef<HTMLButtonElement>(null);
 
   const byHour = new Map<string, Reading[]>();
+  const hoursByDate = new Map<string, string[]>();
   for (const f of hourlyForecasts) {
     const bucket = byHour.get(f.forecastHour) ?? [];
     bucket.push({ source: f.source, temperatureC: f.temperatureC, condition: f.condition });
     byHour.set(f.forecastHour, bucket);
+
+    const dateKey = localDateKey(timeZone, new Date(f.forecastHour));
+    const dateBucket = hoursByDate.get(dateKey) ?? [];
+    if (!dateBucket.includes(f.forecastHour)) dateBucket.push(f.forecastHour);
+    hoursByDate.set(dateKey, dateBucket);
   }
-  const hourKeys = Array.from(byHour.keys()).sort();
-  const nowKey = closestKey(hourKeys);
+  for (const arr of hoursByDate.values()) arr.sort();
 
   const byDate = new Map<string, DailyRow[]>();
   for (const f of dailyForecasts) {
@@ -52,32 +65,51 @@ export function WeatherDashboard({
     bucket.push(f);
     byDate.set(f.forecastDate, bucket);
   }
-  const now = new Date();
-  const todayKey = localDateKey(timeZone, now);
-  const weekKeys = weekDateKeys(timeZone, now);
 
-  // 처음 접속했을 때 시간별 스트립이 "지금"에 맞춰져 있도록, 마운트 시 한 번 그 버튼을 뷰포트
-  // 가운데로 스크롤한다 — 매 렌더마다 하지 않도록 빈 의존성 배열로 마운트 시 1회만 실행.
+  const isViewingToday = selectedDay === todayKey;
+  const nowKey = isViewingToday ? closestKey(hoursByDate.get(todayKey) ?? []) : undefined;
+  const displayedHourKeys = hoursByDate.get(selectedDay) ?? [];
+
+  // 시간별 스트립이 표시하는 날이 바뀔 때마다(마운트 시 최초 1회 포함) 오늘이면 "지금"으로,
+  // 다른 날이면 맨 앞으로 스크롤을 맞춘다.
   useEffect(() => {
-    nowButtonRef.current?.scrollIntoView({ inline: "center", block: "nearest" });
-  }, []);
+    if (isViewingToday) {
+      nowButtonRef.current?.scrollIntoView({ inline: "center", block: "nearest" });
+    } else {
+      listRef.current?.scrollTo({ left: 0 });
+    }
+  }, [selectedDay, isViewingToday]);
 
-  function selectHour(key: string) {
-    setSelection((prev) => (prev?.type === "hour" && prev.key === key ? null : { type: "hour", key }));
-  }
   function selectDay(key: string) {
-    setSelection((prev) => (prev?.type === "day" && prev.key === key ? null : { type: "day", key }));
+    setSelectedDay(key);
+    setSelectedHour(null);
+  }
+  function selectHour(key: string) {
+    setSelectedHour((prev) => (prev === key ? null : key));
   }
 
   let summary: React.ReactNode = null;
-  if (selection?.type === "day") {
-    const rows = byDate.get(selection.key);
+  if (selectedHour !== null) {
+    // "지금" 시간대를 고르면 실측 현재값(currentReadings)을 보여준다 — 시간별 예보의 "지금" 버킷은
+    // 실측이 아니라 근사치이므로 실제 실시간 값이 있으면 그걸 우선한다. 다른 날/시각은 항상 예보값.
+    const isNowSelected = isViewingToday && selectedHour === nowKey;
+    const readings = isNowSelected ? currentReadings : byHour.get(selectedHour) ?? [];
+    const title = isNowSelected
+      ? null
+      : isViewingToday
+        ? `${hourLabel(selectedHour, timeZone)} 예보`
+        : `${monthDayLabel(selectedDay)}(${weekdayShort(selectedDay)}) ${hourLabel(selectedHour, timeZone)} 예보`;
+    if (readings.length > 0) summary = <SummaryCard readings={readings} title={title} />;
+  } else if (isViewingToday) {
+    if (currentReadings.length > 0) summary = <SummaryCard readings={currentReadings} title={null} />;
+  } else {
+    const rows = byDate.get(selectedDay);
     if (rows) {
       const maxes = rows.map((r) => r.tempMaxC);
       const mins = rows.map((r) => r.tempMinC);
       summary = (
         <DailySummaryCard
-          title={`${monthDayLabel(selection.key)}(${weekdayShort(selection.key)}) 예보`}
+          title={`${monthDayLabel(selectedDay)}(${weekdayShort(selectedDay)}) 예보`}
           tempMax={maxes.reduce((sum, t) => sum + t, 0) / maxes.length}
           tempMin={mins.reduce((sum, t) => sum + t, 0) / mins.length}
           condition={rows.find((r) => r.condition)?.condition ?? undefined}
@@ -85,31 +117,30 @@ export function WeatherDashboard({
         />
       );
     }
-  } else {
-    // "지금" 시간대를 고르거나 아무것도 선택하지 않았을 땐 실측 현재값(currentReadings)을 보여준다 —
-    // 시간별 예보의 "지금" 버킷은 실측이 아니라 근사치이므로 실제 실시간 값이 있으면 그걸 우선한다.
-    const isShowingHour = selection?.type === "hour" && selection.key !== nowKey;
-    const readings = isShowingHour ? byHour.get(selection.key) ?? [] : currentReadings;
-    const title = isShowingHour ? `${hourLabel(selection.key, timeZone)} 예보` : null;
-    if (readings.length > 0) summary = <SummaryCard readings={readings} title={title} />;
   }
 
   return (
     <>
       {summary}
 
-      {hourKeys.length > 0 && (
+      {displayedHourKeys.length > 0 && (
         <div className={CARD_CLASS}>
           <h2 className="border-b border-black/[.08] p-4 text-sm font-medium dark:border-white/[.145]">
-            오늘 시간별 날씨
+            시간별 날씨
+            {!isViewingToday && (
+              <span className="font-normal text-zinc-500 dark:text-zinc-400">
+                {" "}
+                · {monthDayLabel(selectedDay)}({weekdayShort(selectedDay)})
+              </span>
+            )}
           </h2>
-          <ul className="flex gap-3 overflow-x-auto p-4">
-            {hourKeys.map((key) => {
+          <ul ref={listRef} className="flex gap-3 overflow-x-auto p-4">
+            {displayedHourKeys.map((key) => {
               const entries = byHour.get(key)!;
               const temp = entries.reduce((sum, e) => sum + e.temperatureC, 0) / entries.length;
               const condition = entries.find((e) => e.condition)?.condition;
-              const isNow = key === nowKey;
-              const isSelected = selection?.type === "hour" && selection.key === key;
+              const isNow = isViewingToday && key === nowKey;
+              const isSelected = selectedHour === key;
 
               return (
                 <li key={key} className="shrink-0">
@@ -167,7 +198,7 @@ export function WeatherDashboard({
               const maxes = rows.map((r) => r.tempMaxC);
               const mins = rows.map((r) => r.tempMinC);
               const condition = rows.find((r) => r.condition)?.condition;
-              const isSelected = selection?.type === "day" && selection.key === key;
+              const isSelected = selectedDay === key;
 
               return (
                 <li key={key} className="p-1">
@@ -302,32 +333,14 @@ function hourLabel(key: string, timeZone: string): string {
   );
 }
 
-// 도시 로컬 타임존 기준 "오늘"의 날짜 키(YYYY-MM-DD)를 구한다.
-function localDateKey(timeZone: string, now: Date): string {
+// 도시 로컬 타임존 기준, 주어진 시각이 속한 날짜 키(YYYY-MM-DD)를 구한다.
+function localDateKey(timeZone: string, date: Date): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(now);
-}
-
-// forecastDate는 "자정(UTC) 기준 날짜"로 저장되는 이 앱의 기존 관례를 따르므로(WeatherDailyForecast
-// 참고), 날짜 키를 다룰 때도 항상 UTC로 해석해 요일 계산이 도시 타임존과 무관하게 일관되도록 한다.
-function mondayOfWeek(dateKey: string): Date {
-  const d = new Date(`${dateKey}T00:00:00Z`);
-  const dow = d.getUTCDay(); // 0=일 ~ 6=토
-  const diffFromMonday = (dow + 6) % 7;
-  return new Date(d.getTime() - diffFromMonday * 86_400_000);
-}
-
-// 오늘이 포함된 주의 월~일 날짜 키 7개를 반환한다 — 예보 데이터가 없는 날(이미 지난 요일)도
-// 자리는 유지해서 항상 월화수목금토일 순서로 7칸이 나오게 한다.
-function weekDateKeys(timeZone: string, now: Date): string[] {
-  const monday = mondayOfWeek(localDateKey(timeZone, now));
-  return Array.from({ length: 7 }, (_, i) =>
-    new Date(monday.getTime() + i * 86_400_000).toISOString().slice(0, 10)
-  );
+  }).format(date);
 }
 
 function weekdayShort(dateKey: string): string {
