@@ -1,4 +1,4 @@
-# autumnsky-blog
+# skyfallresonance
 
 게시판, 묻고 답하기(Q&A), 주요뉴스 크롤링 후 노출, 다중 소스 날씨 비교 기능을 갖춘 블로그. 추후 [electric-bill-rates](https://github.com/autumnskydrum/electric-bill-rates) 전기요금 계산기도 이 워크스페이스에 통합될 예정.
 
@@ -9,7 +9,7 @@
 - [Prisma](https://www.prisma.io) 7 + [Neon Postgres](https://neon.tech) (Vercel 마켓플레이스 연동으로 프로비저닝, `@prisma/adapter-pg` 드라이버 어댑터 사용, 로컬·배포 동일 DB)
 - 배포: [Vercel](https://vercel.com), 데이터 수집 스케줄러: [GitHub Actions](.github/workflows/collect-data.yml) (Vercel Hobby 크론은 하루 1회 제한이라 미채택)
 
-**실제 배포 URL:** https://autumnsky-blog.vercel.app
+**실제 배포 URL:** https://skyfallresonance.vercel.app
 
 ## 시작하기
 

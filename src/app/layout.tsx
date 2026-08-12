@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "autumnsky-blog",
+  title: "skyfallresonance",
   description: "게시판, 묻고 답하기, 뉴스 크롤링을 갖춘 블로그",
 };
 
@@ -29,7 +29,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <header className="border-b border-black/[.08] dark:border-white/[.145]">
           <nav className="mx-auto flex max-w-3xl items-center gap-6 px-6 py-4 text-sm font-medium">
             <Link href="/" className="font-semibold">
-              autumnsky-blog
+              skyfallresonance
             </Link>
             {NAV_ITEMS.map((item) => (
               <Link key={item.href} href={item.href}>

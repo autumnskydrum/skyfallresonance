@@ -3,7 +3,7 @@ import type { CityTarget, DailyForecastResult, WeatherReadingResult } from "../t
 
 // 문서: https://api.met.no/weatherapi/locationforecast/2.0/documentation
 // API 키 불필요. 단, 이용약관상 User-Agent에 앱을 식별할 수 있는 정보를 반드시 넣어야 한다.
-const USER_AGENT = "autumnsky-blog/1.0 (https://github.com/autumnskydrum/autumnsky-blog)";
+const USER_AGENT = "skyfallresonance/1.0 (https://github.com/autumnskydrum/skyfallresonance)";
 
 export async function fetchMetNorway(
   city: CityTarget

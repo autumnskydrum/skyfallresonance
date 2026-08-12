@@ -5,7 +5,7 @@ import { NAV_ITEMS } from "@/lib/nav";
 export default function Home() {
   return (
     <PageContainer>
-      <h1 className="text-2xl font-semibold">autumnsky-blog</h1>
+      <h1 className="text-2xl font-semibold">skyfallresonance</h1>
       <div className="grid gap-4 sm:grid-cols-2">
         {NAV_ITEMS.map((item) => (
           <Link
