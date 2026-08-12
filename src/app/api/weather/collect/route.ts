@@ -119,12 +119,30 @@ async function collectCity(city: CityTarget) {
   });
 
   // 일별 예보도 forecastDate가 지난 날짜인 행은 지운다 — 오늘이 지나면 그 소스가 그 날짜를 다시
-  // 요청하지 않으니 자연스럽게 덮어써지지 않고, 그대로 두면 무한정 쌓이거나(소스가 언어/타임존
-  // 관련 버그로 한 번 잘못 쓴 뒤 다시 갱신되지 않은 값 등) 옛날 값이 남아 이번 주 예보 카드에
-  // 섞여 보일 수 있다.
+  // 요청하지 않으니 자연스럽게 덮어써지지 않고, 그대로 두면 무한정 쌓인다.
   await prisma.weatherDailyForecast.deleteMany({
     where: { citySlug: city.slug, forecastDate: { lt: start } },
   });
+
+  // 소스별 실제 도달 범위(WeatherAPI.com days=3, KMA 2~3일 등)보다 먼 미래 날짜에 예전에 한 번
+  // (예: 가입 초기 트라이얼로 더 길게 나왔을 때) 값이 써진 뒤로 그 소스가 다시는 그 날짜를
+  // 요청하지 않아 영원히 안 갱신되는 "고아 행"이 생길 수 있다 — 위 지난 날짜 정리로는 못 잡는다
+  // (미래 날짜라서). 이번 호출에서 소스가 실제로 돌려준 날짜 집합에 없는, 그러면서 아직 화면에
+  // 표시되는 범위(오늘~+6일) 안에 있는 기존 행은 지운다. 소스가 이번에 아예 실패한 경우([])는
+  // 건드리지 않는다 — 일시적 실패로 기존 값을 지워버리면 안 되므로.
+  const displayEnd = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
+  await Promise.all(
+    Object.entries(dailyBySource).map(([source, days]) => {
+      if (days.length === 0) return Promise.resolve();
+      return prisma.weatherDailyForecast.deleteMany({
+        where: {
+          citySlug: city.slug,
+          source,
+          forecastDate: { gte: start, lt: displayEnd, notIn: days.map((d) => d.date) },
+        },
+      });
+    })
+  );
 
   const results = await Promise.allSettled([
     ...currentUpserts,
