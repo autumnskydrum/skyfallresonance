@@ -174,16 +174,11 @@ export function WeatherDashboard({
 
       {byDate.size > 0 && (
         <div className={CARD_CLASS}>
-          <h2 className="border-b border-black/[.08] p-4 text-sm font-medium dark:border-white/[.145]">
-            이번주 예보{" "}
-            <span className="font-normal text-zinc-500 dark:text-zinc-400">
-              ({fullDateLabel(weekKeys[0])} ~ {fullDateLabel(weekKeys[6])})
-            </span>
-          </h2>
-          <ul className="grid grid-cols-3 divide-y divide-black/[.08] sm:grid-cols-7 sm:divide-y-0 dark:divide-white/[.145]">
+          <ul className="grid grid-cols-4 divide-y divide-black/[.08] sm:grid-cols-8 sm:divide-y-0 dark:divide-white/[.145]">
             {weekKeys.map((key) => {
               const rows = byDate.get(key);
               const isToday = key === todayKey;
+              const label = dayLabel(key, weekKeys[0], todayKey);
 
               if (!rows) {
                 return (
@@ -191,7 +186,7 @@ export function WeatherDashboard({
                     key={key}
                     className="flex flex-col items-center gap-1 p-3 text-center text-sm text-zinc-300 dark:text-zinc-700"
                   >
-                    <span className={isToday ? "font-semibold" : ""}>{weekdayShort(key)}</span>
+                    <span className={isToday ? "font-semibold" : ""}>{label}</span>
                     <span className="text-2xl">–</span>
                     <span>–</span>
                   </li>
@@ -215,7 +210,7 @@ export function WeatherDashboard({
                     }`}
                   >
                     <span className={isToday ? "font-semibold" : "text-zinc-600 dark:text-zinc-400"}>
-                      {weekdayShort(key)}
+                      {label}
                     </span>
                     <span className="text-2xl" aria-hidden>
                       {weatherEmoji(condition)}
@@ -358,9 +353,11 @@ function monthDayLabel(dateKey: string): string {
   return `${month}월 ${day}일`;
 }
 
-function fullDateLabel(dateKey: string): string {
-  const [year, month, day] = dateKey.split("-").map(Number);
-  return `${year}년 ${month}월 ${day}일`;
+// 이번주 예보 카드의 요일 라벨: 첫 칸(어제)·둘째 칸(오늘)은 상대 표현을, 나머지는 요일 이름을 쓴다.
+function dayLabel(dateKey: string, yesterdayKey: string, todayKey: string): string {
+  if (dateKey === yesterdayKey) return "어제";
+  if (dateKey === todayKey) return "오늘";
+  return weekdayShort(dateKey);
 }
 
 // 소스마다 이미 한글 조건 문자열(맑음/흐림/비 등)로 정규화되어 있으므로, 키워드 매칭만으로
