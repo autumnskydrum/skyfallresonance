@@ -6,13 +6,13 @@ name: Collect data
 
 on:
   schedule:
-    - cron: "*/30 * * * *" # 날씨: 30분마다
-    - cron: "0 * * * *" # 뉴스: 매시 정각
+    - cron: "7,37 * * * *" # 날씨: 30분마다 (정각·30분에서 벗어나 GitHub Actions 부하 지연 회피)
+    - cron: "13 * * * *" # 뉴스: 매시 정각 부근이 아닌 13분에 실행 (동일한 이유)
   workflow_dispatch: {}
 
 jobs:
   weather:
-    if: github.event.schedule == '*/30 * * * *' || github.event_name == 'workflow_dispatch'
+    if: github.event.schedule == '7,37 * * * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Trigger weather collection
@@ -21,7 +21,7 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.WEATHER_COLLECT_SECRET }}"
 
   news:
-    if: github.event.schedule == '0 * * * *' || github.event_name == 'workflow_dispatch'
+    if: github.event.schedule == '13 * * * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Trigger news crawl
