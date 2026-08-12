@@ -106,17 +106,24 @@ async function collectCity(city: CityTarget) {
   );
 
   // 시간별 예보는 매 수집 주기마다 "오늘~이번 주 끝"을 기준으로 창이 굴러가 unique 키
-  // (citySlug+source+forecastHour)가 계속 새로 생긴다 — WeatherReading/WeatherDailyForecast처럼
-  // 같은 키를 덮어쓰며 자연스럽게 정리되지 않으므로, weekHours()가 쓰는 것과 동일한 경계
-  // (hourlyRetentionWindow) 밖의 행은 여기서 직접 지운다. 지난 시각뿐 아니라 다음 주로 넘어간
-  // 시각도 지워야 한다 — 그렇지 않으면 이 창이 좁아지는 방향으로 바뀔 때마다 이전 방식이 남긴
-  // 잔여 행이 계속 쌓인다.
+  // (citySlug+source+forecastHour)가 계속 새로 생긴다 — WeatherReading처럼 같은 키를 덮어쓰며
+  // 자연스럽게 정리되지 않으므로, weekHours()가 쓰는 것과 동일한 경계(hourlyRetentionWindow) 밖의
+  // 행은 여기서 직접 지운다. 지난 시각뿐 아니라 다음 주로 넘어간 시각도 지워야 한다 — 그렇지 않으면
+  // 이 창이 좁아지는 방향으로 바뀔 때마다 이전 방식이 남긴 잔여 행이 계속 쌓인다.
   const { start, end } = hourlyRetentionWindow(city.timeZone);
   await prisma.weatherHourlyForecast.deleteMany({
     where: {
       citySlug: city.slug,
       OR: [{ forecastHour: { lt: start } }, { forecastHour: { gte: end } }],
     },
+  });
+
+  // 일별 예보도 forecastDate가 지난 날짜인 행은 지운다 — 오늘이 지나면 그 소스가 그 날짜를 다시
+  // 요청하지 않으니 자연스럽게 덮어써지지 않고, 그대로 두면 무한정 쌓이거나(소스가 언어/타임존
+  // 관련 버그로 한 번 잘못 쓴 뒤 다시 갱신되지 않은 값 등) 옛날 값이 남아 이번 주 예보 카드에
+  // 섞여 보일 수 있다.
+  await prisma.weatherDailyForecast.deleteMany({
+    where: { citySlug: city.slug, forecastDate: { lt: start } },
   });
 
   const results = await Promise.allSettled([
