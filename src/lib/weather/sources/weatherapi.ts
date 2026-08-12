@@ -8,6 +8,12 @@ import type {
 
 // 문서: https://www.weatherapi.com/docs/ — WEATHERAPI_KEY 환경변수 필요.
 // https://www.weatherapi.com 에서 무료 가입 후 발급.
+//
+// last_updated/hour[].time은 위치의 로컬 시간을 오프셋 없는 "naive" 문자열("2026-08-12 14:00")로
+// 준다 — new Date(naive문자열)로 그대로 파싱하면 JS 스펙상 "실행 환경의 로컬 시간"으로 해석되어,
+// 로컬 개발 머신(마침 서울 시간대)에서는 우연히 맞아 보이지만 UTC로 도는 Vercel 프로덕션에서는
+// 도시 UTC 오프셋만큼 통째로 밀려 저장된다. 대신 같이 오는 *_epoch(UTC 유닉스 타임스탬프, 초 단위)를
+// 쓰면 이 모호함 자체가 없다 — 이 함수와 fetchWeatherApiHourly 둘 다 이 방식을 따른다.
 export async function fetchWeatherApi(
   city: CityTarget
 ): Promise<WeatherReadingResult | null> {
@@ -25,7 +31,7 @@ export async function fetchWeatherApi(
   return {
     temperatureC: current.temp_c,
     condition: current.condition?.text,
-    observedAt: new Date(current.last_updated.replace(" ", "T")),
+    observedAt: new Date(current.last_updated_epoch * 1000),
   };
 }
 
@@ -73,9 +79,11 @@ export async function fetchWeatherApiHourly(
   if (!Array.isArray(days)) return [];
 
   const points: HourlyForecastResult[] = days.flatMap(
-    (d: { hour?: Array<{ time: string; temp_c: number; condition?: { text?: string } }> }) =>
+    (d: {
+      hour?: Array<{ time_epoch: number; temp_c: number; condition?: { text?: string } }>;
+    }) =>
       (d.hour ?? []).map((h) => ({
-        time: new Date(h.time.replace(" ", "T")),
+        time: new Date(h.time_epoch * 1000),
         temperatureC: h.temp_c,
         condition: h.condition?.text,
       }))
