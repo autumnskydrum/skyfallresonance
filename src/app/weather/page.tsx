@@ -23,7 +23,9 @@ export default async function WeatherPage() {
     prisma.weatherHourlyForecast.findMany({
       where: { citySlug: city.slug },
       orderBy: [{ forecastHour: "asc" }, { source: "asc" }],
-      take: 120,
+      // 최대 7일(오늘~이번 주 끝) x 24시간 x 5개 소스 = 840행이 이론적 상한이라 1000이면 여유 있다.
+      // (구 상한 120은 "오늘 하루치만" 보관하던 시절 값 — 주간으로 넓히면서 같이 늘려야 했다.)
+      take: 1000,
     }),
   ]);
 
