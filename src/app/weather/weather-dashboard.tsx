@@ -140,7 +140,10 @@ export function WeatherDashboard({
               const temp = entries.reduce((sum, e) => sum + e.temperatureC, 0) / entries.length;
               const condition = entries.find((e) => e.condition)?.condition;
               const isNow = isViewingToday && key === nowKey;
-              const isSelected = selectedHour === key;
+              // 지금 카드는 명시적으로 클릭하지 않아도(=selectedHour가 null인 기본 상태) 실시간 값을
+              // 보여주는 중이므로 선택된 것처럼 배경을 칠한다 — 글자 굵기만으로는 "포커스"가 잘 안 보인다는
+              // 피드백 반영. 다른 시간을 고르면 이 강조는 사라지고 그 시간 카드로 넘어간다.
+              const isSelected = selectedHour === key || (isNow && selectedHour === null);
 
               return (
                 <li key={key} className="shrink-0">
