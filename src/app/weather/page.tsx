@@ -10,7 +10,7 @@ export default async function WeatherPage() {
   const countryCode = await detectCountryCode();
   const city = cityForCountry(countryCode);
 
-  const [readings, dailyForecasts] = await Promise.all([
+  const [readings, dailyForecasts, hourlyForecasts] = await Promise.all([
     prisma.weatherReading.findMany({
       where: { citySlug: city.slug },
       orderBy: { source: "asc" },
@@ -19,6 +19,11 @@ export default async function WeatherPage() {
       where: { citySlug: city.slug },
       orderBy: [{ forecastDate: "asc" }, { source: "asc" }],
       take: 40,
+    }),
+    prisma.weatherHourlyForecast.findMany({
+      where: { citySlug: city.slug },
+      orderBy: [{ forecastHour: "asc" }, { source: "asc" }],
+      take: 120,
     }),
   ]);
 
@@ -33,6 +38,12 @@ export default async function WeatherPage() {
         <EmptyState message="아직 수집된 날씨 데이터가 없습니다." />
       ) : (
         <WeatherSummary readings={readings} />
+      )}
+
+      {hourlyForecasts.length === 0 ? (
+        <EmptyState message="아직 수집된 시간별 예보가 없습니다." />
+      ) : (
+        <HourlyForecast forecasts={hourlyForecasts} timeZone={city.timeZone} />
       )}
 
       {dailyForecasts.length === 0 ? (
@@ -78,6 +89,101 @@ function WeatherSummary({
       </ul>
     </div>
   );
+}
+
+function HourlyForecast({
+  forecasts,
+  timeZone,
+}: {
+  forecasts: {
+    forecastHour: Date;
+    source: string;
+    temperatureC: number;
+    condition: string | null;
+  }[];
+  timeZone: string;
+}) {
+  const byHour = new Map<string, typeof forecasts>();
+  for (const f of forecasts) {
+    const key = f.forecastHour.toISOString();
+    const bucket = byHour.get(key) ?? [];
+    bucket.push(f);
+    byHour.set(key, bucket);
+  }
+
+  const hours = Array.from(byHour.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(0, 24)
+    .map(([key, entries], i) => {
+      const temps = entries.map((e) => e.temperatureC);
+      const condition = entries.find((e) => e.condition)?.condition;
+      const date = new Date(key);
+      return {
+        key,
+        isNow: i === 0,
+        label:
+          i === 0
+            ? "지금"
+            : date.toLocaleTimeString("ko-KR", {
+                hour: "numeric",
+                hour12: false,
+                timeZone,
+              }) + "시",
+        temp: temps.reduce((sum, t) => sum + t, 0) / temps.length,
+        condition,
+        sourceCount: entries.length,
+      };
+    });
+
+  return (
+    <div className={CARD_CLASS}>
+      <h2 className="border-b border-black/[.08] p-4 text-sm font-medium dark:border-white/[.145]">
+        오늘 시간별 날씨
+      </h2>
+      <ul className="flex gap-5 overflow-x-auto p-4">
+        {hours.map((h) => (
+          <li
+            key={h.key}
+            className="flex shrink-0 flex-col items-center gap-2 text-center text-sm"
+          >
+            <span
+              className={
+                h.isNow
+                  ? "font-semibold"
+                  : "text-zinc-500 dark:text-zinc-400"
+              }
+            >
+              {h.label}
+            </span>
+            <span className="text-2xl" aria-hidden>
+              {weatherEmoji(h.condition)}
+            </span>
+            <span className="font-medium">{Math.round(h.temp)}°</span>
+            <span className="text-[10px] text-zinc-400">소스 {h.sourceCount}개</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// 소스마다 이미 한글 조건 문자열(맑음/흐림/비 등)로 정규화되어 있으므로, 키워드 매칭만으로
+// 대응하는 이모지를 고른다 — 새 아이콘 라이브러리를 추가하지 않기 위한 가벼운 방법.
+function weatherEmoji(condition: string | null | undefined): string {
+  if (!condition) return "🌡️";
+  if (condition.includes("뇌우")) return "⛈️";
+  if (condition.includes("강한 눈") || condition.includes("폭설")) return "🌨️";
+  if (condition.includes("눈")) return "🌨️";
+  if (condition.includes("진눈깨비")) return "🌨️";
+  if (condition.includes("강한 비") || condition.includes("소나기")) return "🌧️";
+  if (condition.includes("이슬비") || condition.includes("비") || condition.includes("빗방울"))
+    return "🌦️";
+  if (condition.includes("안개")) return "🌫️";
+  if (condition.includes("흐림") || condition.includes("구름 많음")) return "☁️";
+  if (condition.includes("구름")) return "⛅";
+  if (condition.includes("맑음") || condition.toLowerCase().includes("sunny") || condition.toLowerCase().includes("clear"))
+    return "☀️";
+  return "🌡️";
 }
 
 function WeeklyForecast({

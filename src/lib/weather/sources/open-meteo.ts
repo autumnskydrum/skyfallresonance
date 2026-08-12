@@ -1,4 +1,10 @@
-import type { CityTarget, DailyForecastResult, WeatherReadingResult } from "../types";
+import { nextHours } from "../aggregate";
+import type {
+  CityTarget,
+  DailyForecastResult,
+  HourlyForecastResult,
+  WeatherReadingResult,
+} from "../types";
 
 // 문서: https://open-meteo.com/en/docs — API 키 불필요.
 export async function fetchOpenMeteo(
@@ -38,6 +44,29 @@ export async function fetchOpenMeteoDaily(
     tempMinC: daily.temperature_2m_min[i],
     condition: describeWeatherCode(daily.weather_code[i]),
   }));
+}
+
+export async function fetchOpenMeteoHourly(
+  city: CityTarget
+): Promise<HourlyForecastResult[]> {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&hourly=temperature_2m,weather_code&timezone=auto&forecast_days=2`;
+
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) return [];
+
+  const data = await res.json();
+  const hourly = data.hourly;
+  if (!hourly?.time) return [];
+
+  const points: HourlyForecastResult[] = hourly.time.map(
+    (dateStr: string, i: number) => ({
+      time: new Date(dateStr),
+      temperatureC: hourly.temperature_2m[i],
+      condition: describeWeatherCode(hourly.weather_code[i]),
+    })
+  );
+
+  return nextHours(points);
 }
 
 // https://open-meteo.com/en/docs 의 WMO Weather interpretation codes 요약

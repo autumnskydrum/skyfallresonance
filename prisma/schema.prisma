@@ -81,3 +81,21 @@ model WeatherDailyForecast {
 
   @@unique([citySlug, source, forecastDate])
 }
+
+// 오늘 기준 24시간 시간별 예보. 소스마다 시간 간격이 달라(기상청은 3시간 단위 등) 도시+소스+forecastHour
+// 조합당 최신 값 하나만 유지한다 — 간격이 성긴 소스는 자연스럽게 일부 시간대만 채운다(7일 예보와 동일한 철학).
+// forecastHour가 매 수집 주기마다 "지금"을 기준으로 굴러가므로, 지나간 시각의 행은 수집 시점에 정리한다
+// (WeatherReading/WeatherDailyForecast와 달리 unique 키 자체가 시간마다 새로 생기기 때문).
+model WeatherHourlyForecast {
+  id           String   @id @default(cuid())
+  citySlug     String
+  cityName     String
+  countryCode  String
+  source       String
+  forecastHour DateTime
+  temperatureC Float
+  condition    String?
+  fetchedAt    DateTime @default(now())
+
+  @@unique([citySlug, source, forecastHour])
+}

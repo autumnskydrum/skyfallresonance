@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireBearerAuth, tallySettled } from "@/lib/auth";
 import { TRACKED_CITIES } from "@/lib/weather/cities";
-import { fetchAllDailySources, fetchAllSources } from "@/lib/weather/sources";
+import {
+  fetchAllDailySources,
+  fetchAllHourlySources,
+  fetchAllSources,
+} from "@/lib/weather/sources";
 import type { CityTarget } from "@/lib/weather/types";
 
 // 기상 데이터 수집 엔트리 포인트.
@@ -15,9 +19,10 @@ import type { CityTarget } from "@/lib/weather/types";
 const CONCURRENCY = 5;
 
 async function collectCity(city: CityTarget) {
-  const [readings, dailyBySource] = await Promise.all([
+  const [readings, dailyBySource, hourlyBySource] = await Promise.all([
     fetchAllSources(city),
     fetchAllDailySources(city),
+    fetchAllHourlySources(city),
   ]);
 
   const currentUpserts = Object.entries(readings).map(([source, reading]) =>
@@ -71,7 +76,47 @@ async function collectCity(city: CityTarget) {
     )
   );
 
-  const results = await Promise.allSettled([...currentUpserts, ...dailyUpserts]);
+  const hourlyUpserts = Object.entries(hourlyBySource).flatMap(([source, hours]) =>
+    hours.map((hour) =>
+      prisma.weatherHourlyForecast.upsert({
+        where: {
+          citySlug_source_forecastHour: {
+            citySlug: city.slug,
+            source,
+            forecastHour: hour.time,
+          },
+        },
+        create: {
+          citySlug: city.slug,
+          cityName: city.name,
+          countryCode: city.countryCode,
+          source,
+          forecastHour: hour.time,
+          temperatureC: hour.temperatureC,
+          condition: hour.condition,
+        },
+        update: {
+          temperatureC: hour.temperatureC,
+          condition: hour.condition,
+          fetchedAt: new Date(),
+        },
+      })
+    )
+  );
+
+  // 시간별 예보는 매 수집 주기마다 "지금"을 기준으로 창이 굴러가 unique 키(citySlug+source+forecastHour)가
+  // 계속 새로 생긴다 — WeatherReading/WeatherDailyForecast처럼 같은 키를 덮어쓰며 자연스럽게 정리되지 않으므로,
+  // 지나간 시각의 행은 여기서 직접 지워 테이블이 무한히 커지지 않게 한다.
+  const currentHourStart = new Date(Math.floor(Date.now() / 3_600_000) * 3_600_000);
+  await prisma.weatherHourlyForecast.deleteMany({
+    where: { citySlug: city.slug, forecastHour: { lt: currentHourStart } },
+  });
+
+  const results = await Promise.allSettled([
+    ...currentUpserts,
+    ...dailyUpserts,
+    ...hourlyUpserts,
+  ]);
   return tallySettled(results);
 }
 

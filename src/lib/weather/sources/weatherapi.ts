@@ -1,4 +1,10 @@
-import type { CityTarget, DailyForecastResult, WeatherReadingResult } from "../types";
+import { nextHours } from "../aggregate";
+import type {
+  CityTarget,
+  DailyForecastResult,
+  HourlyForecastResult,
+  WeatherReadingResult,
+} from "../types";
 
 // 문서: https://www.weatherapi.com/docs/ — WEATHERAPI_KEY 환경변수 필요.
 // https://www.weatherapi.com 에서 무료 가입 후 발급.
@@ -48,4 +54,32 @@ export async function fetchWeatherApiDaily(
     tempMinC: d.day.mintemp_c,
     condition: d.day.condition?.text,
   }));
+}
+
+// days=2: 자정 근처에도 "지금부터 24시간" 창을 채울 다음날 새벽 시간대가 필요하다.
+// 여전히 FREE_PLAN_DAYS(3) 이내라 트라이얼 만료 이후에도 안전하다.
+export async function fetchWeatherApiHourly(
+  city: CityTarget
+): Promise<HourlyForecastResult[]> {
+  const apiKey = process.env.WEATHERAPI_KEY;
+  if (!apiKey) return [];
+
+  const url = `https://api.weatherapi.com/v1/forecast.json?key=${apiKey}&q=${city.lat},${city.lon}&days=2`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) return [];
+
+  const data = await res.json();
+  const days = data.forecast?.forecastday;
+  if (!Array.isArray(days)) return [];
+
+  const points: HourlyForecastResult[] = days.flatMap(
+    (d: { hour?: Array<{ time: string; temp_c: number; condition?: { text?: string } }> }) =>
+      (d.hour ?? []).map((h) => ({
+        time: new Date(h.time.replace(" ", "T")),
+        temperatureC: h.temp_c,
+        condition: h.condition?.text,
+      }))
+  );
+
+  return nextHours(points);
 }

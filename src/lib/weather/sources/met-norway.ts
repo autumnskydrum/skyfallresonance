@@ -1,5 +1,10 @@
-import { aggregateDailyFromHourly } from "../aggregate";
-import type { CityTarget, DailyForecastResult, WeatherReadingResult } from "../types";
+import { aggregateDailyFromHourly, nextHours } from "../aggregate";
+import type {
+  CityTarget,
+  DailyForecastResult,
+  HourlyForecastResult,
+  WeatherReadingResult,
+} from "../types";
 
 // 문서: https://api.met.no/weatherapi/locationforecast/2.0/documentation
 // API 키 불필요. 단, 이용약관상 User-Agent에 앱을 식별할 수 있는 정보를 반드시 넣어야 한다.
@@ -66,6 +71,45 @@ export async function fetchMetNorwayDaily(
     .filter((p): p is NonNullable<typeof p> => p !== null);
 
   return aggregateDailyFromHourly(points).slice(0, 7);
+}
+
+export async function fetchMetNorwayHourly(
+  city: CityTarget
+): Promise<HourlyForecastResult[]> {
+  const url = `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${city.lat}&lon=${city.lon}`;
+
+  const res = await fetch(url, {
+    headers: { "User-Agent": USER_AGENT },
+    cache: "no-store",
+  });
+  if (!res.ok) return [];
+
+  const data = await res.json();
+  const timeseries: Array<{
+    time: string;
+    data: {
+      instant?: { details?: { air_temperature?: number } };
+      next_1_hours?: { summary?: { symbol_code?: string } };
+      next_6_hours?: { summary?: { symbol_code?: string } };
+    };
+  }> = data.properties?.timeseries ?? [];
+
+  const points = timeseries
+    .map((entry) => {
+      const temperatureC = entry.data.instant?.details?.air_temperature;
+      const symbolCode =
+        entry.data.next_1_hours?.summary?.symbol_code ??
+        entry.data.next_6_hours?.summary?.symbol_code;
+      if (typeof temperatureC !== "number") return null;
+      return {
+        time: new Date(entry.time),
+        temperatureC,
+        condition: symbolCode ? describeSymbolCode(symbolCode) : undefined,
+      };
+    })
+    .filter((p): p is NonNullable<typeof p> => p !== null);
+
+  return nextHours(points);
 }
 
 function describeSymbolCode(symbolCode: string): string {

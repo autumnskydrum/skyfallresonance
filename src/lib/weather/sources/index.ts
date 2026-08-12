@@ -2,19 +2,21 @@ import { isNordic } from "../cities";
 import type {
   CityTarget,
   DailyForecastResult,
+  HourlyForecastResult,
   WeatherReadingResult,
   WeatherSource,
 } from "../types";
-import { fetchKma, fetchKmaDaily } from "./kma";
-import { fetchMetNorway, fetchMetNorwayDaily } from "./met-norway";
-import { fetchOpenMeteo, fetchOpenMeteoDaily } from "./open-meteo";
-import { fetchSmhi, fetchSmhiDaily } from "./smhi";
-import { fetchWeatherApi, fetchWeatherApiDaily } from "./weatherapi";
+import { fetchKma, fetchKmaDaily, fetchKmaHourly } from "./kma";
+import { fetchMetNorway, fetchMetNorwayDaily, fetchMetNorwayHourly } from "./met-norway";
+import { fetchOpenMeteo, fetchOpenMeteoDaily, fetchOpenMeteoHourly } from "./open-meteo";
+import { fetchSmhi, fetchSmhiDaily, fetchSmhiHourly } from "./smhi";
+import { fetchWeatherApi, fetchWeatherApiDaily, fetchWeatherApiHourly } from "./weatherapi";
 
 type SourceDefinition = {
   label: string;
   fetch: (city: CityTarget) => Promise<WeatherReadingResult | null>;
   fetchDaily: (city: CityTarget) => Promise<DailyForecastResult[]>;
+  fetchHourly: (city: CityTarget) => Promise<HourlyForecastResult[]>;
   // 생략 시 모든 도시에 적용. 지역 한정 소스(SMHI, 기상청 등)는 여기서 선언한다 —
   // 어느 소스를 어느 도시에 호출할지는 각 fetch 함수가 아니라 이 레지스트리가 결정한다.
   isApplicable?: (city: CityTarget) => boolean;
@@ -25,27 +27,32 @@ const SOURCES: Record<WeatherSource, SourceDefinition> = {
     label: "Open-Meteo",
     fetch: fetchOpenMeteo,
     fetchDaily: fetchOpenMeteoDaily,
+    fetchHourly: fetchOpenMeteoHourly,
   },
   "met-norway": {
     label: "MET Norway",
     fetch: fetchMetNorway,
     fetchDaily: fetchMetNorwayDaily,
+    fetchHourly: fetchMetNorwayHourly,
   },
   kma: {
     label: "기상청",
     fetch: fetchKma,
     fetchDaily: fetchKmaDaily,
+    fetchHourly: fetchKmaHourly,
     isApplicable: (city) => city.countryCode === "KR",
   },
   weatherapi: {
     label: "WeatherAPI.com",
     fetch: fetchWeatherApi,
     fetchDaily: fetchWeatherApiDaily,
+    fetchHourly: fetchWeatherApiHourly,
   },
   smhi: {
     label: "SMHI",
     fetch: fetchSmhi,
     fetchDaily: fetchSmhiDaily,
+    fetchHourly: fetchSmhiHourly,
     isApplicable: (city) => isNordic(city.countryCode),
   },
 };
@@ -98,6 +105,27 @@ export async function fetchAllDailySources(
   );
 
   const results: Partial<Record<WeatherSource, DailyForecastResult[]>> = {};
+  for (const [source, result] of entries) {
+    if (result.length > 0) results[source] = result;
+  }
+  return results;
+}
+
+export async function fetchAllHourlySources(
+  city: CityTarget
+): Promise<Partial<Record<WeatherSource, HourlyForecastResult[]>>> {
+  const entries = await Promise.all(
+    applicableSources(city).map(async (source) => {
+      try {
+        const result = await SOURCES[source].fetchHourly(city);
+        return [source, result] as [WeatherSource, HourlyForecastResult[]];
+      } catch {
+        return [source, []] as [WeatherSource, HourlyForecastResult[]];
+      }
+    })
+  );
+
+  const results: Partial<Record<WeatherSource, HourlyForecastResult[]>> = {};
   for (const [source, result] of entries) {
     if (result.length > 0) results[source] = result;
   }

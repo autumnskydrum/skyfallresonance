@@ -1,6 +1,11 @@
-import { aggregateDailyFromHourly } from "../aggregate";
+import { aggregateDailyFromHourly, nextHours } from "../aggregate";
 import { isNordic } from "../cities";
-import type { CityTarget, DailyForecastResult, WeatherReadingResult } from "../types";
+import type {
+  CityTarget,
+  DailyForecastResult,
+  HourlyForecastResult,
+  WeatherReadingResult,
+} from "../types";
 
 // 문서: https://opendata.smhi.se/apidocs/metfcst/ — API 키 불필요.
 // 스웨덴 기상청 데이터라 북유럽(SE/NO/DK/FI/IS) 밖 지역은 유의미한 데이터가 없어 호출 자체를 건너뛴다.
@@ -70,6 +75,41 @@ export async function fetchSmhiDaily(
     .filter((p): p is NonNullable<typeof p> => p !== null);
 
   return aggregateDailyFromHourly(points).slice(0, 7);
+}
+
+export async function fetchSmhiHourly(
+  city: CityTarget
+): Promise<HourlyForecastResult[]> {
+  if (!isNordic(city.countryCode)) return [];
+
+  const lon = city.lon.toFixed(6);
+  const lat = city.lat.toFixed(6);
+  const url = `https://opendata-download-metfcst.smhi.se/api/category/snow1g/version/1/geotype/point/lon/${lon}/lat/${lat}/data.json`;
+
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) return [];
+
+  const data = await res.json();
+  const timeSeries: Array<{
+    time: string;
+    data?: { air_temperature?: number; symbol_code?: number };
+  }> = data.timeSeries ?? [];
+
+  const points = timeSeries
+    .map((entry) => {
+      const temperatureC = entry.data?.air_temperature;
+      const symbolCode = entry.data?.symbol_code;
+      if (typeof temperatureC !== "number") return null;
+      return {
+        time: new Date(entry.time),
+        temperatureC,
+        condition:
+          typeof symbolCode === "number" ? describeSymbol(symbolCode) : undefined,
+      };
+    })
+    .filter((p): p is NonNullable<typeof p> => p !== null);
+
+  return nextHours(points);
 }
 
 // SMHI symbol_code 요약: https://opendata.smhi.se/apidocs/metfcst/parameters.html

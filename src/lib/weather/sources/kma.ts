@@ -1,4 +1,10 @@
-import type { CityTarget, DailyForecastResult, WeatherReadingResult } from "../types";
+import { nextHours } from "../aggregate";
+import type {
+  CityTarget,
+  DailyForecastResult,
+  HourlyForecastResult,
+  WeatherReadingResult,
+} from "../types";
 
 // 기상청 단기예보 조회서비스(초단기실황, getUltraSrtNcst) — data.go.kr(15084084)에서 발급받은
 // 서비스키가 필요하다. https://www.data.go.kr/data/15084084/openapi.do
@@ -70,9 +76,13 @@ const VILAGE_FCST_URL =
 // 단기예보는 3시간 간격(0200/0500/0800/1100/1400/1700/2000/2300 발표, 약 10분 후 제공)으로
 // 앞으로 약 2~3일치 기온(TMP)을 준다. TMN/TMX(일 최저/최고)는 특정 발표시각에만 포함되는 경우가 있어
 // 신뢰성 있게 매일 최고/최저를 뽑기 위해 그날의 TMP 전체에서 직접 min/max를 계산한다.
-export async function fetchKmaDaily(city: CityTarget): Promise<DailyForecastResult[]> {
+type VilageFcstItem = { category: string; fcstDate: string; fcstTime: string; fcstValue: string };
+
+// getVilageFcst 원시 응답을 가져와 항목 배열로 반환. fetchKmaDaily/fetchKmaHourly가 공유해서
+// 동일한 응답 구조 파싱·에러 처리를 중복하지 않게 한다(호출 자체는 각자 한 번씩 나간다).
+async function fetchVilageFcstItems(city: CityTarget): Promise<VilageFcstItem[] | null> {
   const apiKey = process.env.KMA_API_KEY;
-  if (!apiKey) return [];
+  if (!apiKey) return null;
 
   const { nx, ny } = toKmaGrid(city.lat, city.lon);
   const { baseDate, baseTime } = getVilageFcstBaseDateTime(new Date());
@@ -84,28 +94,29 @@ export async function fetchKmaDaily(city: CityTarget): Promise<DailyForecastResu
     `&nx=${nx}&ny=${ny}`;
 
   const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) return [];
+  if (!res.ok) return null;
 
   let data: {
     response?: {
       header?: { resultCode?: string };
-      body?: {
-        items?: {
-          item?: Array<{ category: string; fcstDate: string; fcstTime: string; fcstValue: string }>;
-        };
-      };
+      body?: { items?: { item?: VilageFcstItem[] } };
     };
   };
   try {
     data = await res.json();
   } catch {
-    return [];
+    return null;
   }
 
-  if (data.response?.header?.resultCode !== "00") return [];
+  if (data.response?.header?.resultCode !== "00") return null;
 
   const items = data.response?.body?.items?.item;
-  if (!Array.isArray(items)) return [];
+  return Array.isArray(items) ? items : null;
+}
+
+export async function fetchKmaDaily(city: CityTarget): Promise<DailyForecastResult[]> {
+  const items = await fetchVilageFcstItems(city);
+  if (!items) return [];
 
   type DateBucket = {
     temps: number[];
@@ -137,6 +148,34 @@ export async function fetchKmaDaily(city: CityTarget): Promise<DailyForecastResu
         condition: describeSkyPty(sky, pty),
       };
     });
+}
+
+// getVilageFcst는 3시간 간격(02/05/08/11/14/17/20/23시)으로만 값을 주므로 "시간별"이라도
+// 실제로는 3시간 단위로만 채워진다 — 일별 예보와 같은 이유(자연스럽게 성긴 소스)로 문제 삼지 않는다.
+export async function fetchKmaHourly(city: CityTarget): Promise<HourlyForecastResult[]> {
+  const items = await fetchVilageFcstItems(city);
+  if (!items) return [];
+
+  type TimeBucket = { temp?: number; sky?: number; pty?: number };
+  const byTime = new Map<string, TimeBucket>();
+  for (const item of items) {
+    const key = `${item.fcstDate}${item.fcstTime}`;
+    const bucket: TimeBucket = byTime.get(key) ?? {};
+    if (item.category === "TMP") bucket.temp = Number(item.fcstValue);
+    if (item.category === "SKY") bucket.sky = Number(item.fcstValue);
+    if (item.category === "PTY") bucket.pty = Number(item.fcstValue);
+    byTime.set(key, bucket);
+  }
+
+  const points: HourlyForecastResult[] = Array.from(byTime.entries())
+    .filter(([, bucket]) => typeof bucket.temp === "number")
+    .map(([key, bucket]) => ({
+      time: kstToDate(key.slice(0, 8), key.slice(8, 12)),
+      temperatureC: bucket.temp as number,
+      condition: describeSkyPty(bucket.sky, bucket.pty),
+    }));
+
+  return nextHours(points);
 }
 
 // 단기예보는 3시간 간격(0200~2300, 8회)으로 발표되며 약 10분 후 제공된다.
