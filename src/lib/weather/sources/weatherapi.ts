@@ -14,7 +14,7 @@ export async function fetchWeatherApi(
   const apiKey = process.env.WEATHERAPI_KEY;
   if (!apiKey) return null;
 
-  const url = `https://api.weatherapi.com/v1/current.json?key=${apiKey}&q=${city.lat},${city.lon}`;
+  const url = `https://api.weatherapi.com/v1/current.json?key=${apiKey}&q=${city.lat},${city.lon}&lang=ko`;
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) return null;
 
@@ -40,7 +40,7 @@ export async function fetchWeatherApiDaily(
   const apiKey = process.env.WEATHERAPI_KEY;
   if (!apiKey) return [];
 
-  const url = `https://api.weatherapi.com/v1/forecast.json?key=${apiKey}&q=${city.lat},${city.lon}&days=${FREE_PLAN_DAYS}`;
+  const url = `https://api.weatherapi.com/v1/forecast.json?key=${apiKey}&q=${city.lat},${city.lon}&days=${FREE_PLAN_DAYS}&lang=ko`;
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) return [];
 
@@ -64,7 +64,7 @@ export async function fetchWeatherApiHourly(
   const apiKey = process.env.WEATHERAPI_KEY;
   if (!apiKey) return [];
 
-  const url = `https://api.weatherapi.com/v1/forecast.json?key=${apiKey}&q=${city.lat},${city.lon}&days=2`;
+  const url = `https://api.weatherapi.com/v1/forecast.json?key=${apiKey}&q=${city.lat},${city.lon}&days=2&lang=ko`;
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) return [];
 

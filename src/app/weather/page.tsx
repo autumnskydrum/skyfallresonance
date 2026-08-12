@@ -124,7 +124,7 @@ function HourlyForecast({
         label:
           i === 0
             ? "지금"
-            : date.toLocaleTimeString("ko-KR", {
+            : date.toLocaleTimeString("en-US", {
                 hour: "numeric",
                 hour12: false,
                 timeZone,
