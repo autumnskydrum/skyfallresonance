@@ -40,11 +40,21 @@ export function todayHours(
   city: Pick<CityTarget, "timeZone">,
   now: Date = new Date()
 ): HourlyForecastResult[] {
-  const start = startOfLocalDay(city.timeZone, now);
-  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  const { start, end } = localDayBounds(city.timeZone, now);
   return points
     .filter((p) => p.time.getTime() >= start.getTime() && p.time.getTime() < end.getTime())
     .sort((a, b) => a.time.getTime() - b.time.getTime());
+}
+
+// todayHours()와 동일한 "오늘" 경계를 수집 라우트의 정리(prune) 로직도 그대로 써야 해서 노출한다 —
+// 창이 지금 이후로만 굴러가던 이전 방식(now → +24h)에서 이 방식으로 바꾸면서, 지난 시각만 지우던
+// 정리 로직으로는 그 이전 방식이 남겨둔 "내일" 쪽 잔여 행을 못 지우는 문제가 있었다.
+export function localDayBounds(
+  timeZone: string,
+  now: Date = new Date()
+): { start: Date; end: Date } {
+  const start = startOfLocalDay(timeZone, now);
+  return { start, end: new Date(start.getTime() + 24 * 60 * 60 * 1000) };
 }
 
 // IANA 타임존의 "오늘 자정"에 해당하는 UTC 시각을 구한다. 먼저 UTC=로컬이라 가정하고 추측한 뒤,

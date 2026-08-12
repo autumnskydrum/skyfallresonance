@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireBearerAuth, tallySettled } from "@/lib/auth";
+import { localDayBounds } from "@/lib/weather/aggregate";
 import { TRACKED_CITIES } from "@/lib/weather/cities";
 import {
   fetchAllDailySources,
@@ -104,12 +105,17 @@ async function collectCity(city: CityTarget) {
     )
   );
 
-  // 시간별 예보는 매 수집 주기마다 "지금"을 기준으로 창이 굴러가 unique 키(citySlug+source+forecastHour)가
+  // 시간별 예보는 매 수집 주기마다 "오늘"을 기준으로 창이 굴러가 unique 키(citySlug+source+forecastHour)가
   // 계속 새로 생긴다 — WeatherReading/WeatherDailyForecast처럼 같은 키를 덮어쓰며 자연스럽게 정리되지 않으므로,
-  // 지나간 시각의 행은 여기서 직접 지워 테이블이 무한히 커지지 않게 한다.
-  const currentHourStart = new Date(Math.floor(Date.now() / 3_600_000) * 3_600_000);
+  // "오늘" 구간(todayHours()가 쓰는 것과 동일한 로컬 자정~자정 경계) 밖의 행은 여기서 직접 지운다.
+  // 지난 시각뿐 아니라 미래 쪽도 지워야 한다: 예전엔 "지금 → +24시간" 창이라 내일 새벽까지 저장했는데,
+  // 지금은 "오늘 하루"만 저장하므로 그 이전 방식이 남긴 내일 쪽 잔여 행도 정리 대상이다.
+  const { start, end } = localDayBounds(city.timeZone);
   await prisma.weatherHourlyForecast.deleteMany({
-    where: { citySlug: city.slug, forecastHour: { lt: currentHourStart } },
+    where: {
+      citySlug: city.slug,
+      OR: [{ forecastHour: { lt: start } }, { forecastHour: { gte: end } }],
+    },
   });
 
   const results = await Promise.allSettled([
