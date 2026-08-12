@@ -1,4 +1,4 @@
-import { nextHours } from "../aggregate";
+import { todayHours } from "../aggregate";
 import type {
   CityTarget,
   DailyForecastResult,
@@ -175,7 +175,7 @@ export async function fetchKmaHourly(city: CityTarget): Promise<HourlyForecastRe
       condition: describeSkyPty(bucket.sky, bucket.pty),
     }));
 
-  return nextHours(points);
+  return todayHours(points, city);
 }
 
 // 단기예보는 3시간 간격(0200~2300, 8회)으로 발표되며 약 10분 후 제공된다.

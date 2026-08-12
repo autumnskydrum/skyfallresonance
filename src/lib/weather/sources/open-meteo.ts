@@ -1,4 +1,4 @@
-import { nextHours } from "../aggregate";
+import { todayHours } from "../aggregate";
 import type {
   CityTarget,
   DailyForecastResult,
@@ -49,7 +49,9 @@ export async function fetchOpenMeteoDaily(
 export async function fetchOpenMeteoHourly(
   city: CityTarget
 ): Promise<HourlyForecastResult[]> {
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&hourly=temperature_2m,weather_code&timezone=auto&forecast_days=2`;
+  // forecast_days=1: timezone=auto와 함께 쓰면 "오늘"(도시 로컬 자정~자정) 하루치 시간별 값을
+  // 이미 지난 시각까지 포함해 그대로 준다 — todayHours()가 필요한 구간이 정확히 이것이다.
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&hourly=temperature_2m,weather_code&timezone=auto&forecast_days=1`;
 
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) return [];
@@ -66,7 +68,7 @@ export async function fetchOpenMeteoHourly(
     })
   );
 
-  return nextHours(points);
+  return todayHours(points, city);
 }
 
 // https://open-meteo.com/en/docs 의 WMO Weather interpretation codes 요약

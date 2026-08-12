@@ -1,4 +1,4 @@
-import { aggregateDailyFromHourly, nextHours } from "../aggregate";
+import { aggregateDailyFromHourly, todayHours } from "../aggregate";
 import type {
   CityTarget,
   DailyForecastResult,
@@ -109,7 +109,7 @@ export async function fetchMetNorwayHourly(
     })
     .filter((p): p is NonNullable<typeof p> => p !== null);
 
-  return nextHours(points);
+  return todayHours(points, city);
 }
 
 function describeSymbolCode(symbolCode: string): string {
