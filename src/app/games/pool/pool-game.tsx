@@ -2,10 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 
-// 논리 좌표계(테이블 내부 좌표) 크기 — 캔버스는 이 해상도로 그리고 CSS로 화면 폭에 맞춰
+// 논리 좌표계(테이블 내부 좌표) 크기 — 캔버스는 이 해상도로 그리고 CSS로 화면 크기에 맞춰
 // 축소 표시한다. 물리 연산은 전부 이 고정 좌표계에서 이루어지므로 화면 크기와 무관하다.
-const TABLE_W = 896;
-const TABLE_H = 448;
+// 세로(포켓볼 앱들의 일반적인 방향)로 바꾸면서 폭/높이를 그대로 맞바꿨다 — 레일/공/포켓 크기
+// 비율은 그대로 유지된다.
+const TABLE_W = 448;
+const TABLE_H = 896;
 const RAIL = 28;
 const BALL_R = 11;
 const POCKET_R = 20;
@@ -16,17 +18,16 @@ const BOTTOM = TABLE_H - RAIL - BALL_R;
 
 const POCKETS = [
   { x: RAIL, y: RAIL },
-  { x: TABLE_W / 2, y: RAIL - 4 },
   { x: TABLE_W - RAIL, y: RAIL },
+  { x: RAIL - 4, y: TABLE_H / 2 },
+  { x: TABLE_W - RAIL + 4, y: TABLE_H / 2 },
   { x: RAIL, y: TABLE_H - RAIL },
-  { x: TABLE_W / 2, y: TABLE_H - RAIL + 4 },
   { x: TABLE_W - RAIL, y: TABLE_H - RAIL },
 ];
 
-// 마찰이 지수적으로 감쇠하다 보니 STOP_SPEED가 너무 낮으면(처음 값 0.04) 눈에 거의 안 보일
-// 만큼 느려진 뒤로도 한참을 "멈춘 것으로" 안 쳐서 몇 초씩 미세하게 계속 기어가는 게 느껴졌다 —
-// 문턱을 확 올려 눈에 띄게 느려지면 바로 멈춘 걸로 처리한다. FRICTION도 같이 낮춰 전체
-// 감속 자체를 더 빠르게 했다.
+// 마찰이 지수적으로 감쇠하다 보니 STOP_SPEED가 너무 낮으면 눈에 거의 안 보일 만큼 느려진
+// 뒤로도 한참을 "멈춘 것으로" 안 쳐서 몇 초씩 미세하게 계속 기어가는 게 느껴졌다 — 문턱을 확
+// 올려 눈에 띄게 느려지면 바로 멈춘 걸로 처리한다.
 const FRICTION = 0.978;
 const STOP_SPEED = 0.35;
 const CUSHION_RESTITUTION = 0.9;
@@ -34,9 +35,17 @@ const BALL_RESTITUTION = 0.96;
 const MAX_PULL = 130;
 const POWER_SCALE = 0.22;
 
+// 당점(회전) 관련 — 실제 당구 물리(구름·미끄럼 마찰이 시간에 따라 상호작용하며 만드는 드로우/
+// 팔로우)를 정확히 시뮬레이션하진 않는다. 좌우 당점은 이동 중 진행 방향에 수직으로 작은 힘을
+// 계속 줘서 곡선으로 휘게 하고(사이드 스핀), 상하 당점은 큐볼이 다른 공과 처음 충돌하는 순간
+// 진행 방향으로 한 번 추가 임펄스를 줘서(팔로우샷=앞으로 더 감, 드로우샷=뒤로 끌림) 흉내만
+// 낸다 — 그래도 "어느 정도 조절 가능한 스핀"이라는 목적은 충분히 달성한다.
+const SIDE_SPIN_CURVE = 0.05;
+const SIDE_SPIN_DECAY = 0.985;
+const VERTICAL_SPIN_IMPULSE = 0.9;
+
 type BallType = "cue" | "solid" | "stripe" | "eight";
 type Ball = {
-  id: number;
   number: number; // 0 = 큐볼
   type: BallType;
   x: number;
@@ -44,9 +53,13 @@ type Ball = {
   vx: number;
   vy: number;
   potted: boolean;
+  spinX: number; // 큐볼 전용: -1(왼쪽 당점)~1(오른쪽 당점)
+  spinY: number; // 큐볼 전용: -1(아래, 드로우)~1(위, 팔로우)
+  spinApplied: boolean; // 이번 샷에서 첫 충돌에 상하 당점을 이미 적용했는지
 };
 
 // 실제 대회 규정 랙 순서는 아니지만, 8번이 3번째 줄 가운데 오도록 놓은 표준적인 삼각形 배치.
+// 큐볼은 아래쪽에 두고 랙은 위쪽에 둔다 — 삼각형의 꼭짓점(1번 공)이 큐볼에 가장 가깝다.
 const RACK_ORDER = [1, [9, 2], [3, 8, 10], [11, 4, 12, 5], [13, 6, 14, 7, 15]] as const;
 
 const BALL_COLORS: Record<number, string> = {
@@ -73,29 +86,43 @@ function ballType(number: number): BallType {
   return number < 8 ? "solid" : "stripe";
 }
 
+function makeCueBall(): Ball {
+  return {
+    number: 0,
+    type: "cue",
+    x: TABLE_W / 2,
+    y: TABLE_H - RAIL - 160,
+    vx: 0,
+    vy: 0,
+    potted: false,
+    spinX: 0,
+    spinY: 0,
+    spinApplied: false,
+  };
+}
+
 function makeRack(): Ball[] {
-  const balls: Ball[] = [
-    { id: 0, number: 0, type: "cue", x: RAIL + 180, y: TABLE_H / 2, vx: 0, vy: 0, potted: false },
-  ];
-  const apexX = TABLE_W - RAIL - 190;
-  const apexY = TABLE_H / 2;
-  const dx = BALL_R * 1.75;
-  const dy = BALL_R * 2.02;
-  let id = 1;
+  const balls: Ball[] = [makeCueBall()];
+  const apexX = TABLE_W / 2;
+  const apexY = TABLE_H - RAIL - 380;
+  const rowSpacing = BALL_R * 1.75; // 줄 사이(세로) 간격
+  const withinSpacing = BALL_R * 2.02; // 같은 줄 안(가로) 간격
   RACK_ORDER.forEach((row, rowIndex) => {
     const numbers = Array.isArray(row) ? row : [row];
-    const rowX = apexX + rowIndex * dx;
-    const startY = apexY - ((numbers.length - 1) * dy) / 2;
+    const rowY = apexY - rowIndex * rowSpacing;
+    const startX = apexX - ((numbers.length - 1) * withinSpacing) / 2;
     numbers.forEach((num, i) => {
       balls.push({
-        id: id++,
         number: num,
         type: ballType(num),
-        x: rowX,
-        y: startY + i * dy,
+        x: startX + i * withinSpacing,
+        y: rowY,
         vx: 0,
         vy: 0,
         potted: false,
+        spinX: 0,
+        spinY: 0,
+        spinApplied: false,
       });
     });
   });
@@ -109,6 +136,22 @@ function allStopped(balls: Ball[]): boolean {
 function physicsStep(balls: Ball[]) {
   for (const b of balls) {
     if (b.potted) continue;
+
+    // 사이드 스핀: 진행 방향에 수직으로 작은 힘을 계속 줘서 곡선으로 휘게 한다. 속도가
+    // 붙어 있을 때만 의미가 있고(방향이 없으면 어느 쪽으로 휠지 정의가 안 된다), 마찰과
+    // 비슷한 속도로 감쇠시켜 회전이 서서히 죽도록 한다.
+    if (b.spinX !== 0) {
+      const speed = Math.hypot(b.vx, b.vy);
+      if (speed > 0.05) {
+        const dirX = b.vx / speed;
+        const dirY = b.vy / speed;
+        b.vx += -dirY * b.spinX * SIDE_SPIN_CURVE;
+        b.vy += dirX * b.spinX * SIDE_SPIN_CURVE;
+      }
+      b.spinX *= SIDE_SPIN_DECAY;
+      if (Math.abs(b.spinX) < 0.01) b.spinX = 0;
+    }
+
     b.x += b.vx;
     b.y += b.vy;
     b.vx *= FRICTION;
@@ -158,6 +201,23 @@ function physicsStep(balls: Ball[]) {
         const rvy = b.vy - a.vy;
         const relVel = rvx * nx + rvy * ny;
         if (relVel < 0) {
+          // 상하 당점(팔로우/드로우): 큐볼이 이번 샷 들어 처음으로 다른 공과 부딪히는
+          // 순간, 부딪히기 직전 진행 방향으로 한 번 더 힘을 준다 — 위쪽 당점(양수)이면
+          // 앞으로 더 밀려나가는 팔로우샷, 아래쪽 당점(음수)이면 반대로 끌려오는 드로우샷.
+          for (const cue of [a, b]) {
+            if (cue.type === "cue" && !cue.spinApplied && cue.spinY !== 0) {
+              const speed = Math.hypot(cue.vx, cue.vy);
+              if (speed > 0.01) {
+                const dirX = cue.vx / speed;
+                const dirY = cue.vy / speed;
+                const kick = cue.spinY * VERTICAL_SPIN_IMPULSE * speed;
+                cue.vx += dirX * kick;
+                cue.vy += dirY * kick;
+              }
+              cue.spinApplied = true;
+            }
+          }
+
           const impulse = (-(1 + BALL_RESTITUTION) * relVel) / 2;
           a.vx -= impulse * nx;
           a.vy -= impulse * ny;
@@ -182,6 +242,31 @@ function physicsStep(balls: Ball[]) {
     }
   }
   return newlyPotted;
+}
+
+// 조준선이 막힐 때까지(다른 공이나 쿠션에 닿을 때까지) 뻗어나갈 거리를 구한다 — 큐볼을 점으로,
+// 다른 공은 반지름을 2*BALL_R로 키운 원으로 취급하는 표준적인 레이캐스트 트릭.
+function castAimDistance(originX: number, originY: number, dirX: number, dirY: number, balls: Ball[]): number {
+  let maxDist = Infinity;
+  if (dirX > 0) maxDist = Math.min(maxDist, (RIGHT - originX) / dirX);
+  else if (dirX < 0) maxDist = Math.min(maxDist, (LEFT - originX) / dirX);
+  if (dirY > 0) maxDist = Math.min(maxDist, (BOTTOM - originY) / dirY);
+  else if (dirY < 0) maxDist = Math.min(maxDist, (TOP - originY) / dirY);
+
+  for (const b of balls) {
+    if (b.potted || b.type === "cue") continue;
+    const lx = b.x - originX;
+    const ly = b.y - originY;
+    const tca = lx * dirX + ly * dirY;
+    if (tca <= 0) continue;
+    const d2 = lx * lx + ly * ly - tca * tca;
+    const r2 = BALL_R * 2 * (BALL_R * 2);
+    if (d2 > r2) continue;
+    const thc = Math.sqrt(r2 - d2);
+    const t0 = tca - thc;
+    if (t0 > 0 && t0 < maxDist) maxDist = t0;
+  }
+  return maxDist;
 }
 
 function drawTable(ctx: CanvasRenderingContext2D) {
@@ -244,15 +329,19 @@ function drawBall(ctx: CanvasRenderingContext2D, b: Ball) {
 
 type Turn = 1 | 2;
 type Group = "solid" | "stripe";
+type Spin = { x: number; y: number };
 
 export function PoolGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const spinCanvasRef = useRef<HTMLCanvasElement>(null);
   const ballsRef = useRef<Ball[]>(makeRack());
   const rafRef = useRef(0);
   const aimingRef = useRef(false);
   const dragRef = useRef({ x: 0, y: 0 });
   const turnBallsPottedRef = useRef<Ball[]>([]);
   const shotInFlightRef = useRef(false);
+  const spinRef = useRef<Spin>({ x: 0, y: 0 });
+  const spinDraggingRef = useRef(false);
 
   const [turn, setTurn] = useState<Turn>(1);
   const [groups, setGroups] = useState<Record<Turn, Group | null>>({ 1: null, 2: null });
@@ -298,8 +387,8 @@ export function PoolGame() {
 
     if (scratched) {
       cueBall.potted = false;
-      cueBall.x = RAIL + 180;
-      cueBall.y = TABLE_H / 2;
+      cueBall.x = TABLE_W / 2;
+      cueBall.y = TABLE_H - RAIL - 160;
       cueBall.vx = 0;
       cueBall.vy = 0;
     }
@@ -334,6 +423,42 @@ export function PoolGame() {
     resolveTurnRef.current = resolveTurn;
   });
 
+  function drawSpinWidget() {
+    const canvas = spinCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d")!;
+    const size = canvas.width;
+    const r = size / 2 - 3;
+    const cx = size / 2;
+    const cy = size / 2;
+    ctx.clearRect(0, 0, size, size);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = "#f5f2ea";
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "rgba(0,0,0,.3)";
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(0,0,0,.15)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx - r, cy);
+    ctx.lineTo(cx + r, cy);
+    ctx.moveTo(cx, cy - r);
+    ctx.lineTo(cx, cy + r);
+    ctx.stroke();
+    const mx = cx + spinRef.current.x * r;
+    const my = cy + spinRef.current.y * r;
+    ctx.beginPath();
+    ctx.arc(mx, my, 4, 0, Math.PI * 2);
+    ctx.fillStyle = "#e83a3a";
+    ctx.fill();
+  }
+
+  useEffect(() => {
+    drawSpinWidget();
+  }, []);
+
   // 물리 루프는 React 상태가 아니라 ballsRef를 직접 읽고 써서 매 프레임 리렌더를 피한다 —
   // 공이 멈췄을 때만(턴이 넘어갈 때만) resolveTurnRef를 통해 React 상태를 갱신해 UI를 다시 그린다.
   useEffect(() => {
@@ -361,25 +486,28 @@ export function PoolGame() {
       const cue = ballsRef.current.find((b) => b.number === 0 && !b.potted);
       if (!cue) return;
       const { x: px, y: py } = dragRef.current;
-      const dx = cue.x - px;
-      const dy = cue.y - py;
-      const dist = Math.min(Math.hypot(dx, dy), MAX_PULL);
-      if (dist < 4) return;
-      const nx = dx / Math.hypot(dx, dy);
-      const ny = dy / Math.hypot(dx, dy);
+      const pullDx = cue.x - px;
+      const pullDy = cue.y - py;
+      const pullDist = Math.min(Math.hypot(pullDx, pullDy), MAX_PULL);
+      if (pullDist < 4) return;
+      const hyp = Math.hypot(pullDx, pullDy);
+      const nx = pullDx / hyp;
+      const ny = pullDy / hyp;
+
+      const aimLen = castAimDistance(cue.x, cue.y, nx, ny, ballsRef.current);
       ctx.save();
       ctx.strokeStyle = "rgba(255,255,255,.85)";
       ctx.lineWidth = 2;
       ctx.setLineDash([6, 6]);
       ctx.beginPath();
       ctx.moveTo(cue.x, cue.y);
-      ctx.lineTo(cue.x + nx * 220, cue.y + ny * 220);
+      ctx.lineTo(cue.x + nx * aimLen, cue.y + ny * aimLen);
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.strokeStyle = "rgba(255,200,120,.9)";
       ctx.lineWidth = 4;
       ctx.beginPath();
-      ctx.moveTo(cue.x - nx * (dist + BALL_R + 6), cue.y - ny * (dist + BALL_R + 6));
+      ctx.moveTo(cue.x - nx * (pullDist + BALL_R + 6), cue.y - ny * (pullDist + BALL_R + 6));
       ctx.lineTo(cue.x - nx * (BALL_R + 6), cue.y - ny * (BALL_R + 6));
       ctx.stroke();
       ctx.restore();
@@ -423,15 +551,57 @@ export function PoolGame() {
     const ny = dy / Math.hypot(dx, dy);
     cue.vx = nx * dist * POWER_SCALE;
     cue.vy = ny * dist * POWER_SCALE;
+    cue.spinX = spinRef.current.x;
+    cue.spinY = spinRef.current.y;
+    cue.spinApplied = false;
     shotInFlightRef.current = true;
     setCanShoot(false);
     setMessage("공이 움직이는 중...");
+  }
+
+  function spinPointFromEvent(e: React.PointerEvent<HTMLCanvasElement>) {
+    const canvas = e.currentTarget;
+    const rect = canvas.getBoundingClientRect();
+    const size = canvas.width;
+    const scale = size / rect.width;
+    const r = size / 2 - 3;
+    const cx = size / 2;
+    const cy = size / 2;
+    const px = (e.clientX - rect.left) * scale;
+    const py = (e.clientY - rect.top) * scale;
+    let ox = (px - cx) / r;
+    let oy = (py - cy) / r;
+    const mag = Math.hypot(ox, oy);
+    if (mag > 1) {
+      ox /= mag;
+      oy /= mag;
+    }
+    return { x: ox, y: oy };
+  }
+
+  function handleSpinPointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
+    spinDraggingRef.current = true;
+    spinRef.current = spinPointFromEvent(e);
+    drawSpinWidget();
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function handleSpinPointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (!spinDraggingRef.current) return;
+    spinRef.current = spinPointFromEvent(e);
+    drawSpinWidget();
+  }
+
+  function handleSpinPointerUp() {
+    spinDraggingRef.current = false;
   }
 
   function restart() {
     ballsRef.current = makeRack();
     turnBallsPottedRef.current = [];
     shotInFlightRef.current = false;
+    spinRef.current = { x: 0, y: 0 };
+    drawSpinWidget();
     setTurn(1);
     setGroups({ 1: null, 2: null });
     setGameOver(false);
@@ -441,15 +611,29 @@ export function PoolGame() {
 
   return (
     <div className="flex flex-col items-center gap-4">
-      <div className="flex w-full max-w-[896px] items-center justify-between text-sm">
+      <div className="flex w-full items-center justify-between gap-4 text-sm">
         <p className="font-medium">{message}</p>
-        <button
-          type="button"
-          onClick={restart}
-          className="rounded-full border border-black/[.15] px-4 py-1.5 text-xs font-medium transition-colors hover:bg-black/[.04] dark:border-white/[.2] dark:hover:bg-white/[.08]"
-        >
-          다시 시작
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="flex flex-col items-center gap-1">
+            <canvas
+              ref={spinCanvasRef}
+              width={64}
+              height={64}
+              onPointerDown={handleSpinPointerDown}
+              onPointerMove={handleSpinPointerMove}
+              onPointerUp={handleSpinPointerUp}
+              className="h-10 w-10 touch-none rounded-full shadow-inner"
+            />
+            <span className="text-[10px] text-zinc-500 dark:text-zinc-400">당점</span>
+          </div>
+          <button
+            type="button"
+            onClick={restart}
+            className="rounded-full border border-black/[.15] px-4 py-1.5 text-xs font-medium transition-colors hover:bg-black/[.04] dark:border-white/[.2] dark:hover:bg-white/[.08]"
+          >
+            다시 시작
+          </button>
+        </div>
       </div>
       <canvas
         ref={canvasRef}
@@ -458,10 +642,12 @@ export function PoolGame() {
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        className="w-full max-w-[896px] touch-none rounded-lg shadow-lg"
+        className="block h-[min(82vh,880px)] max-w-[94vw] touch-none rounded-lg shadow-lg [aspect-ratio:1/2]"
       />
-      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+      <p className="max-w-[420px] text-center text-xs text-zinc-500 dark:text-zinc-400">
         큐볼 뒤에서 원하는 방향 반대쪽으로 드래그한 뒤 놓으면 그 방향으로 칩니다. 멀리 끌수록 세게 칩니다.
+        오른쪽 위 작은 원(당점)을 눌러 큐볼의 어느 지점을 칠지 정하면 회전을 줄 수 있어요 — 위/아래는
+        팔로우·드로우, 좌/우는 휘어지는 사이드 스핀입니다.
       </p>
     </div>
   );
