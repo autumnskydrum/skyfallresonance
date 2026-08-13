@@ -33,16 +33,20 @@ const STOP_SPEED = 0.35;
 const CUSHION_RESTITUTION = 0.9;
 const BALL_RESTITUTION = 0.96;
 const MAX_PULL = 130;
-const POWER_SCALE = 0.22;
+const POWER_SCALE = 0.15;
 
 // 당점(회전) 관련 — 실제 당구 물리(구름·미끄럼 마찰이 시간에 따라 상호작용하며 만드는 드로우/
 // 팔로우)를 정확히 시뮬레이션하진 않는다. 좌우 당점은 이동 중 진행 방향에 수직으로 작은 힘을
 // 계속 줘서 곡선으로 휘게 하고(사이드 스핀), 상하 당점은 큐볼이 다른 공과 처음 충돌하는 순간
 // 진행 방향으로 한 번 추가 임펄스를 줘서(팔로우샷=앞으로 더 감, 드로우샷=뒤로 끌림) 흉내만
 // 낸다 — 그래도 "어느 정도 조절 가능한 스핀"이라는 목적은 충분히 달성한다.
-const SIDE_SPIN_CURVE = 0.05;
-const SIDE_SPIN_DECAY = 0.985;
-const VERTICAL_SPIN_IMPULSE = 0.9;
+// 처음 값들은 회전 효과가 매 프레임 계속 누적되거나(사이드 스핀) 충돌 순간 속도에 비례해
+// 그대로 실려서(상하 스핀) 샷 전체를 지배할 만큼 과했다 — 궤적이 "이상하다"는 피드백 이후
+// 눈에 띄되 과하지 않은 수준으로 다 낮췄고, 사이드 스핀은 감쇠도 빠르게 해서 효과가 샷 초반에
+// 집중되고(실제 당구에서도 회전이 구름 마찰로 빨리 죽는다) 긴 롤 전체를 휘게 만들지 않는다.
+const SIDE_SPIN_CURVE = 0.02;
+const SIDE_SPIN_DECAY = 0.95;
+const VERTICAL_SPIN_IMPULSE = 0.45;
 
 type BallType = "cue" | "solid" | "stripe" | "eight";
 type Ball = {
@@ -436,11 +440,11 @@ export function PoolGame() {
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.fillStyle = "#f5f2ea";
     ctx.fill();
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 2.5;
     ctx.strokeStyle = "rgba(0,0,0,.3)";
     ctx.stroke();
     ctx.strokeStyle = "rgba(0,0,0,.15)";
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(cx - r, cy);
     ctx.lineTo(cx + r, cy);
@@ -448,9 +452,12 @@ export function PoolGame() {
     ctx.lineTo(cx, cy + r);
     ctx.stroke();
     const mx = cx + spinRef.current.x * r;
-    const my = cy + spinRef.current.y * r;
+    // spinY는 위=양수인데 화면 y는 아래로 갈수록 커지므로, 마커를 그릴 때 부호를 다시
+    // 뒤집어야 값과 실제로 표시되는 위치(위/아래)가 서로 맞는다 — spinPointFromEvent의
+    // 반대 방향 변환.
+    const my = cy - spinRef.current.y * r;
     ctx.beginPath();
-    ctx.arc(mx, my, 4, 0, Math.PI * 2);
+    ctx.arc(mx, my, 7, 0, Math.PI * 2);
     ctx.fillStyle = "#e83a3a";
     ctx.fill();
   }
@@ -510,6 +517,18 @@ export function PoolGame() {
       ctx.moveTo(cue.x - nx * (pullDist + BALL_R + 6), cue.y - ny * (pullDist + BALL_R + 6));
       ctx.lineTo(cue.x - nx * (BALL_R + 6), cue.y - ny * (BALL_R + 6));
       ctx.stroke();
+
+      const powerPct = Math.round((pullDist / MAX_PULL) * 100);
+      const labelX = cue.x - nx * (pullDist + BALL_R + 26);
+      const labelY = cue.y - ny * (pullDist + BALL_R + 26);
+      ctx.font = "bold 20px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "rgba(0,0,0,.6)";
+      ctx.strokeText(`${powerPct}%`, labelX, labelY);
+      ctx.fillStyle = "rgba(255,200,120,.95)";
+      ctx.fillText(`${powerPct}%`, labelX, labelY);
       ctx.restore();
     }
 
@@ -570,7 +589,10 @@ export function PoolGame() {
     const px = (e.clientX - rect.left) * scale;
     const py = (e.clientY - rect.top) * scale;
     let ox = (px - cx) / r;
-    let oy = (py - cy) / r;
+    // 화면 좌표는 아래로 갈수록 y가 커지지만, spinY는 "위(양수)=팔로우, 아래(음수)=드로우"로
+    // 정의했다 — 부호를 뒤집지 않으면 위젯에서 공 아래쪽(시각적으로 드로우 지점)을 눌렀는데
+    // 양수 spinY(팔로우)가 나가는 버그가 된다. 실제로 궤적이 반대로 나온다는 피드백의 원인이었다.
+    let oy = -(py - cy) / r;
     const mag = Math.hypot(ox, oy);
     if (mag > 1) {
       ox /= mag;
@@ -617,14 +639,14 @@ export function PoolGame() {
           <div className="flex flex-col items-center gap-1">
             <canvas
               ref={spinCanvasRef}
-              width={64}
-              height={64}
+              width={128}
+              height={128}
               onPointerDown={handleSpinPointerDown}
               onPointerMove={handleSpinPointerMove}
               onPointerUp={handleSpinPointerUp}
-              className="h-10 w-10 touch-none rounded-full shadow-inner"
+              className="h-20 w-20 touch-none rounded-full shadow-inner"
             />
-            <span className="text-[10px] text-zinc-500 dark:text-zinc-400">당점</span>
+            <span className="text-xs text-zinc-500 dark:text-zinc-400">당점</span>
           </div>
           <button
             type="button"
