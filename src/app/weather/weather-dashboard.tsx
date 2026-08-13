@@ -210,6 +210,10 @@ export function WeatherDashboard({
       className={`${cineDisplay.variable} ${cineBody.variable} ${cineMono.variable} ${cineKr.variable} relative flex-1 overflow-hidden transition-[background] duration-1000 ease-in-out`}
       style={{
         background: backgroundForCondition(visualCondition),
+        // 맑음의 해 글로우(주황) + 하늘(파랑) 두 레이어를 기본 알파 합성으로 겹치면 보색이라
+        // 올리브빛 회색으로 탁해진다 — screen으로 섞으면 물감이 아니라 빛처럼 밝게 겹쳐진다.
+        // 단일 레이어인 다른 조건에는 영향 없다.
+        backgroundBlendMode: "screen",
         color: textColorForCondition(visualCondition),
         fontFamily: "var(--font-cine-body), var(--font-cine-kr), sans-serif",
       }}
