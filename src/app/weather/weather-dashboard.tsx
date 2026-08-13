@@ -227,11 +227,13 @@ export function WeatherDashboard({
           // 커질수록 안 잘리는 오른쪽 아래만 상대적으로 더 넓게 드러나 "해가 온도 쪽으로
           // 움직인다"는 착시가 났다. 모서리에서 살짝 덜 걸치게(-left-4 -top-4) 당기고 배율도
           // 절충해 착시는 줄이면서 예전보다는 확실히 다이내믹하게 유지했다.
+          // mixBlendMode(원래 screen — 주황+파랑을 겹칠 때 탁해지는 걸 막으려고 썼다)는 안드로이드
+          // 크롬 실기기에서 아예 렌더링/애니메이션이 안 되는 문제가 있어(2026-08-14) 뺐다 —
+          // 대신 색 자체를 옅은 미색으로 바꿔서 일반 알파 합성으로도 하늘색과 탁하게 섞이지 않게 했다.
           <div
             className="pointer-events-none absolute -left-4 -top-4 h-[220px] w-[220px] animate-[weather-sun-pulse_4.5s_ease-in-out_infinite] rounded-full motion-reduce:animate-none sm:h-[420px] sm:w-[420px]"
             style={{
-              backgroundImage: "radial-gradient(circle, rgba(255,196,72,.9) 0%, rgba(255,196,72,0) 70%)",
-              mixBlendMode: "screen",
+              backgroundImage: "radial-gradient(circle, rgba(255,246,222,.7) 0%, rgba(255,246,222,0) 70%)",
             }}
           />
         )}

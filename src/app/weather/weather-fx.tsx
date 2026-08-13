@@ -201,7 +201,6 @@ export function WeatherFx({ condition }: { condition: VisualCondition }) {
                 height: `${c.height}px`,
                 opacity: c.opacity,
                 backgroundColor: "#fff",
-                mixBlendMode: "screen",
                 animation: `weather-cloud-drift ${c.duration}s linear infinite`,
                 animationDelay: `${c.delay}s`,
               }}
@@ -256,18 +255,21 @@ export function WeatherFx({ condition }: { condition: VisualCondition }) {
             }}
           />
           {/* 배경 전체가 아지랑이처럼 일렁이는 느낌 — 서로 다른 위치/주기로 떠다니는 흐릿한 열기
-              덩어리 두 개를 screen으로 겹친다. 한 덩어리(heat-pulse)만으로는 "제자리에서 커졌다
-              작아지는" 느낌이라 "일렁인다"는 요청에는 이쪽이 더 맞는다. top 퍼센트는 이 엘리먼트의
-              포함 블록(WeatherFx 전체 — 히어로+시간별+주간을 합친 높이)을 기준으로 계산되므로,
-              34%를 넘겨 너무 아래로 잡으면(예전 시도) 총 콘텐츠가 화면보다 훨씬 긴 기기에서
-              접힌 아래로 밀려나 안 보인다 — 기존 heat-pulse(top-34%)와 비슷한 범위로 맞췄다. */}
+              덩어리 두 개를 겹친다. 한 덩어리(heat-pulse)만으로는 "제자리에서 커졌다 작아지는"
+              느낌이라 "일렁인다"는 요청에는 이쪽이 더 맞는다. top 퍼센트는 이 엘리먼트의 포함
+              블록(WeatherFx 전체 — 히어로+시간별+주간을 합친 높이)을 기준으로 계산되므로, 34%를
+              넘겨 너무 아래로 잡으면(예전 시도) 총 콘텐츠가 화면보다 훨씬 긴 기기에서 접힌 아래로
+              밀려나 안 보인다 — 기존 heat-pulse(top-34%)와 비슷한 범위로 맞췄다. mixBlendMode는
+              원래 screen이었는데(같은 색 계열이라 없어도 탁해지지 않는다) 안드로이드 크롬
+              실기기에서 blend-mode가 붙은 엘리먼트는 애니메이션 자체가 안 도는 문제가 있어
+              뺐다(2026-08-14) — sun-glow/clouds도 같은 이유로 같이 뺐다. */}
           <div
             className="absolute left-[10%] top-[18%] h-[280px] w-[280px] animate-[weather-heat-shimmer_7s_ease-in-out_infinite] rounded-full blur-[8px] motion-reduce:animate-none"
-            style={{ backgroundImage: "radial-gradient(circle, #ffd27a 0%, transparent 70%)", mixBlendMode: "screen" }}
+            style={{ backgroundImage: "radial-gradient(circle, #ffd27a 0%, transparent 70%)" }}
           />
           <div
             className="absolute left-[78%] top-[42%] h-[240px] w-[240px] animate-[weather-heat-shimmer_9s_ease-in-out_infinite] rounded-full blur-[8px] motion-reduce:animate-none [animation-delay:-4s]"
-            style={{ backgroundImage: "radial-gradient(circle, #ff8a3d 0%, transparent 70%)", mixBlendMode: "screen" }}
+            style={{ backgroundImage: "radial-gradient(circle, #ff8a3d 0%, transparent 70%)" }}
           />
         </>
       )}
