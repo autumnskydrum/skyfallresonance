@@ -218,12 +218,14 @@ export function WeatherDashboard({
       <WeatherFx condition={visualCondition} />
 
       {/* 헤드라인 대비 확보용 비네트 — 맑음 배경이 너무 밝아 흰 글씨가 안 보인다는 피드백으로
-          추가. 눈(밝은 배경 + 어두운 글씨)만 반대로 대비를 깎으므로 제외한다. */}
+          추가. 눈(밝은 배경 + 어두운 글씨)만 반대로 대비를 깎으므로 제외한다. inset-0 대신 상단
+          420px에만 두는 이유: 전체 높이(시간별/주간 카드까지 포함) 기준 퍼센트로 위치를 잡으면
+          히어로가 아니라 브랜드 줄 근처에 어긋나게 걸린다. */}
       {visualCondition !== "눈" && (
         <div
-          className="pointer-events-none absolute inset-0 z-[2]"
+          className="pointer-events-none absolute inset-x-0 top-0 z-[2] h-[420px]"
           style={{
-            background: "radial-gradient(ellipse 640px 420px at 50% 8%, rgba(0,0,0,.32), transparent 70%)",
+            background: "radial-gradient(ellipse 640px 420px at 50% 20%, rgba(0,0,0,.32), transparent 70%)",
           }}
         />
       )}

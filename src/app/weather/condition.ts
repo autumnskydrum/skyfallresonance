@@ -68,9 +68,9 @@ export function conditionLine(cityName: string, visual: VisualCondition): string
 export function backgroundForCondition(visual: VisualCondition): string {
   switch (visual) {
     case "맑음":
-      // 원래 시안의 밝은 크림색(#ffe3ad)이 헤드라인 텍스트와 겹쳐 눈부시고 글자가 잘 안 보인다는
-      // 피드백으로 톤을 한 단계 낮췄다 — 채도는 유지하되 명도를 줄여 흰 글씨와의 대비를 확보.
-      return "radial-gradient(ellipse at 50% -10%, #eab35c 0%, #4f9fae 45%, #163f52 100%)";
+      // 톤을 낮춘 버전이 오히려 너무 어둡다는 피드백으로 원래 시안의 밝은 그라디언트로 복구했다
+      // — 대신 눈부심의 실제 원인이던 회전 광선(sun-rays)을 weather-fx.tsx에서 아예 뺐다.
+      return "radial-gradient(ellipse at 50% -10%, #ffe3ad 0%, #6fc7d1 45%, #1c5b73 100%)";
     case "구름많음":
       return "linear-gradient(180deg, #7c8a99 0%, #3f4a56 100%)";
     case "비":

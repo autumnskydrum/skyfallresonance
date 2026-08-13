@@ -275,20 +275,6 @@ export function WeatherFx({ condition }: { condition: VisualCondition }) {
       <canvas ref={rainCanvasRef} className="absolute inset-0 block h-full w-full" />
       <canvas ref={emberCanvasRef} className="absolute inset-0 block h-full w-full" />
 
-      {condition === "맑음" && (
-        <div
-          className="absolute left-1/2 top-[38%] -ml-[450px] -mt-[450px] h-[900px] w-[900px] animate-spin rounded-full [animation-duration:60s] motion-reduce:animate-none"
-          style={{
-            backgroundImage:
-              "repeating-conic-gradient(from 0deg, #fff2cf 0deg 3deg, transparent 3deg 20deg)",
-            // 원래 시안의 0.55는 맑음 배경 위에서 너무 쨍하고 글자가 안 보인다는 피드백으로 낮춤.
-            opacity: 0.22,
-            WebkitMaskImage: "radial-gradient(circle, #000 0%, #000 30%, transparent 68%)",
-            maskImage: "radial-gradient(circle, #000 0%, #000 30%, transparent 68%)",
-          }}
-        />
-      )}
-
       {condition === "폭염" && (
         <div
           className="absolute left-1/2 top-[34%] h-[640px] w-[640px] animate-[weather-heat-pulse_3.2s_ease-in-out_infinite] rounded-full blur-[2px] motion-reduce:animate-none"
