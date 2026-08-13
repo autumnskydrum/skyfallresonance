@@ -328,7 +328,12 @@ export function WeatherDashboard({
         {byDate.size > 0 && (
           <>
             <h2 className="mb-3.5 mt-10 text-[13px] font-semibold opacity-85">이번 주</h2>
-            <div className={`${GLASS_CLASS} grid grid-cols-4 gap-1.5 p-2.5 sm:grid-cols-7`}>
+            {/* 좁은 화면에서는 7칸이 grid-cols-4에 다 안 들어가 두 줄로 줄바꿈됐다는 피드백으로,
+                시간별 스트립과 같은 가로 스크롤 방식으로 통일했다. 넓은 화면은 sm:overflow-visible로
+                스크롤 없이 7칸이 한 줄에 그대로 펼쳐진다. */}
+            <div
+              className={`${GLASS_CLASS} flex gap-1.5 overflow-x-auto p-2.5 sm:grid sm:grid-cols-7 sm:overflow-visible`}
+            >
               {weekKeys.map((key) => {
                 const rows = byDate.get(key);
                 const isToday = key === todayKey;
@@ -337,7 +342,10 @@ export function WeatherDashboard({
 
                 if (!rows) {
                   return (
-                    <div key={key} className="flex flex-col items-center gap-1.5 p-2.5 text-center opacity-30">
+                    <div
+                      key={key}
+                      className="flex min-w-[72px] shrink-0 flex-col items-center gap-1.5 p-2.5 text-center opacity-30 sm:min-w-0"
+                    >
                       <span className={isToday ? "font-bold" : ""} style={monoFontStyle}>
                         {label}
                       </span>
@@ -358,7 +366,7 @@ export function WeatherDashboard({
                     key={key}
                     type="button"
                     onClick={() => selectDay(key)}
-                    className={`flex flex-col items-center gap-1.5 rounded-2xl p-2.5 text-center transition-colors ${
+                    className={`flex min-w-[72px] shrink-0 flex-col items-center gap-1.5 rounded-2xl p-2.5 text-center transition-colors sm:min-w-0 ${
                       isSelected ? "bg-white/20" : "hover:bg-white/10"
                     }`}
                   >
