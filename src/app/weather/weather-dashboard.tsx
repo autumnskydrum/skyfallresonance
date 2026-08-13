@@ -217,10 +217,13 @@ export function WeatherDashboard({
             기준으로 계산하던 이전 버전은 총 콘텐츠 높이가 화면 높이와 크게 다른 기기에서 엉뚱한
             자리에 나타났다 — weather-fx.tsx 주석 참고). z-[-1]로 SKYFALL 텍스트 뒤에 깔린다. */}
         {visualCondition === "맑음" && (
+          // weather-sun-pulse가 크기뿐 아니라 밝기(opacity)도 같이 움직인다 — 지금 밝기가 어두운
+          // 쪽 끝(peak일 때보다 어둡게)이 되도록, 그라디언트 자체의 알파를 .65->.85로 올리고
+          // opacity 애니메이션의 낮은 쪽을 .75 정도로 잡아 지금 수준과 비슷하게 맞췄다.
           <div
             className="pointer-events-none absolute -left-10 -top-10 z-[-1] h-[220px] w-[220px] animate-[weather-sun-pulse_6s_ease-in-out_infinite] rounded-full motion-reduce:animate-none sm:h-[420px] sm:w-[420px]"
             style={{
-              backgroundImage: "radial-gradient(circle, rgba(255,196,72,.65) 0%, rgba(255,196,72,0) 70%)",
+              backgroundImage: "radial-gradient(circle, rgba(255,196,72,.85) 0%, rgba(255,196,72,0) 70%)",
               mixBlendMode: "screen",
             }}
           />
