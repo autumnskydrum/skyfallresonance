@@ -45,3 +45,36 @@ body {
     transform: translate(-50%, -50%) scale(1.15);
   }
 }
+
+/* 비/눈 낙하 애니메이션 — 원래 캔버스로 그렸으나 안드로이드 크롬 실기기에서 안 보이는 문제가
+   있어 순수 CSS로 바꿨다(weather-fx.tsx 상단 주석 참고). top을 애니메이션하는 이유: transform의
+   퍼센트 값은 엘리먼트 자기 자신의 크기 기준이라 아주 작은 입자로는 컨테이너 전체를 가로지르는
+   낙하를 표현할 수 없다 — top의 퍼센트는 컨테이너(포함 블록) 기준이라 원하는 동작이 된다. */
+@keyframes weather-rain-fall {
+  from {
+    top: -8%;
+  }
+  to {
+    top: 108%;
+  }
+}
+
+@keyframes weather-snow-fall {
+  0% {
+    top: -6%;
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(8px);
+  }
+  50% {
+    transform: translateX(-8px);
+  }
+  75% {
+    transform: translateX(6px);
+  }
+  100% {
+    top: 106%;
+    transform: translateX(0);
+  }
+}
