@@ -232,33 +232,45 @@ export function WeatherDashboard({
         </div>
 
         {hero && (
-          <div className="mt-12 text-center sm:mt-14">
-            {hero.title && <p className="mb-2 text-xs font-medium opacity-80">{hero.title}</p>}
-            <div
-              className="text-[84px] font-bold leading-[0.9] tracking-[-0.03em] [font-variant-numeric:tabular-nums] sm:text-[132px]"
-              style={{ ...displayFontStyle, textShadow: "0 8px 40px rgba(0,0,0,.25)" }}
-            >
-              {Math.round(hero.temp)}°
-              {hero.tempSecondary !== null && (
-                <span className="text-[0.5em] opacity-60"> / {Math.round(hero.tempSecondary)}°</span>
+          <div className="mt-12 sm:mt-14">
+            {/* 소스가 4개 이상이면 온도 아래에서 줄바꿈이 일어나 가독성이 떨어진다는 피드백으로,
+                넓은 화면에서는 온도 오른쪽에 세로 리스트로 뺐다. 좁은 화면(모바일)은 옆에 붙일
+                공간이 없어 아래로 쌓는다. */}
+            <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:justify-center sm:gap-10">
+              <div className="text-center">
+                {hero.title && <p className="mb-2 text-xs font-medium opacity-80">{hero.title}</p>}
+                <div
+                  className="text-[84px] font-bold leading-[0.9] tracking-[-0.03em] [font-variant-numeric:tabular-nums] sm:text-[132px]"
+                  style={{ ...displayFontStyle, textShadow: "0 8px 40px rgba(0,0,0,.25)" }}
+                >
+                  {Math.round(hero.temp)}°
+                  {hero.tempSecondary !== null && (
+                    <span className="text-[0.5em] opacity-60"> / {Math.round(hero.tempSecondary)}°</span>
+                  )}
+                </div>
+                <p className="mt-2 text-lg opacity-90 sm:text-xl">{hero.conditionText}</p>
+                <p className="mt-3 text-xs opacity-75" style={monoFontStyle}>
+                  {hero.rangeLine}
+                </p>
+              </div>
+
+              {hero.readouts.length > 0 && (
+                <div
+                  className="flex flex-col gap-2 text-xs opacity-85 sm:border-l sm:pl-8"
+                  style={{
+                    ...monoFontStyle,
+                    borderColor: visualCondition === "눈" ? "rgba(0,0,0,.15)" : "rgba(255,255,255,.25)",
+                  }}
+                >
+                  {hero.readouts.map((r) => (
+                    <div key={r.source} className="flex justify-between gap-6">
+                      <span className="opacity-70">{sourceLabel(r.source)}</span>
+                      <span>{r.value}</span>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
-            <p className="mt-2 text-lg opacity-90 sm:text-xl">{hero.conditionText}</p>
-            <p className="mt-3 text-xs opacity-75" style={monoFontStyle}>
-              {hero.rangeLine}
-            </p>
-            {hero.readouts.length > 0 && (
-              <div
-                className="mt-4 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs opacity-85"
-                style={monoFontStyle}
-              >
-                {hero.readouts.map((r) => (
-                  <span key={r.source}>
-                    {sourceLabel(r.source)} {r.value}
-                  </span>
-                ))}
-              </div>
-            )}
           </div>
         )}
 
