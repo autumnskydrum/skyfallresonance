@@ -215,20 +215,27 @@ export function WeatherDashboard({
       <div className="relative z-[3] mx-auto max-w-[900px] px-5 pt-4 pb-8 sm:px-8 sm:pt-6 sm:pb-12">
         {/* 콘텐츠 열 자신의 좌상단에 고정 픽셀로 앵커한다(퍼센트 위치를 페이지 전체 배경 높이
             기준으로 계산하던 이전 버전은 총 콘텐츠 높이가 화면 높이와 크게 다른 기기에서 엉뚱한
-            자리에 나타났다 — weather-fx.tsx 주석 참고). z-[-1]로 SKYFALL 텍스트 뒤에 깔린다. */}
+            자리에 나타났다 — weather-fx.tsx 주석 참고). z-index를 음수로 주는 대신, 이 글로우를
+            SKYFALL 텍스트 줄(바로 아래, position:relative)보다 먼저 그려서 텍스트 뒤에 깔리게
+            한다 — 둘 다 z-index:auto인 positioned 엘리먼트라 DOM 순서(먼저 그린 게 아래)로
+            쌓임 순서가 정해진다. 음수 z-index 방식은 일부 모바일 브라우저에서 애니메이션 자체가
+            아예 안 도는 문제가 있었다(2026-08-14, 실기기 확인). */}
         {visualCondition === "맑음" && (
-          // weather-sun-pulse가 크기뿐 아니라 밝기(opacity)도 같이 움직인다 — 지금 밝기가 어두운
-          // 쪽 끝(peak일 때보다 어둡게)이 되도록, 그라디언트 자체의 알파를 .65->.85로 올리고
-          // opacity 애니메이션의 낮은 쪽을 .75 정도로 잡아 지금 수준과 비슷하게 맞췄다.
+          // weather-sun-pulse가 크기(0.8~1.3배)와 밝기(.45~1)를 같이 움직인다 — 맨 처음 범위
+          // (0.9~1.15배, .75~1)는 거의 안 보인다는 피드백으로 한 번 크게 키웠더니(0.6~1.5배),
+          // 이 글로우가 모서리에 걸쳐 있어(-left-10 -top-10, 원의 왼쪽 위 대부분이 잘려 나감)
+          // 커질수록 안 잘리는 오른쪽 아래만 상대적으로 더 넓게 드러나 "해가 온도 쪽으로
+          // 움직인다"는 착시가 났다. 모서리에서 살짝 덜 걸치게(-left-4 -top-4) 당기고 배율도
+          // 절충해 착시는 줄이면서 예전보다는 확실히 다이내믹하게 유지했다.
           <div
-            className="pointer-events-none absolute -left-10 -top-10 z-[-1] h-[220px] w-[220px] animate-[weather-sun-pulse_6s_ease-in-out_infinite] rounded-full motion-reduce:animate-none sm:h-[420px] sm:w-[420px]"
+            className="pointer-events-none absolute -left-4 -top-4 h-[220px] w-[220px] animate-[weather-sun-pulse_4.5s_ease-in-out_infinite] rounded-full motion-reduce:animate-none sm:h-[420px] sm:w-[420px]"
             style={{
-              backgroundImage: "radial-gradient(circle, rgba(255,196,72,.85) 0%, rgba(255,196,72,0) 70%)",
+              backgroundImage: "radial-gradient(circle, rgba(255,196,72,.9) 0%, rgba(255,196,72,0) 70%)",
               mixBlendMode: "screen",
             }}
           />
         )}
-        <div className="flex items-center justify-between text-[13px] opacity-85">
+        <div className="relative flex items-center justify-between text-[13px] opacity-85">
           <span style={{ ...displayFontStyle, fontWeight: 700, fontSize: 20, letterSpacing: "-0.01em" }}>
             SKYFALL
           </span>

@@ -135,6 +135,20 @@ const SNOW_PARTICLES = (() => {
   }));
 })();
 
+// 좌->우로 아주 느리게 흘러가는 뭉게구름 몇 덩어리 — 실제 구름 모양 대신 sun-glow/heat-shimmer와
+// 같은 계열(블러 처리한 부드러운 타원 + screen 블렌드)로 만들어 이 화면의 시각 언어를 유지한다.
+const CLOUD_PARTICLES = (() => {
+  const rand = makeSeededRandom(4242);
+  return Array.from({ length: 4 }, () => ({
+    top: 8 + rand() * 40,
+    width: 260 + rand() * 220,
+    height: 90 + rand() * 60,
+    duration: 42 + rand() * 30,
+    delay: -rand() * 60,
+    opacity: 0.25 + rand() * 0.25,
+  }));
+})();
+
 export function WeatherFx({ condition }: { condition: VisualCondition }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const emberCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -173,6 +187,28 @@ export function WeatherFx({ condition }: { condition: VisualCondition }) {
         ref={emberCanvasRef}
         className="absolute inset-0 block h-full w-full [transform:translateZ(0)] [will-change:transform]"
       />
+
+      {condition === "구름많음" && (
+        <div className="absolute inset-0 overflow-hidden">
+          {CLOUD_PARTICLES.map((c, i) => (
+            <span
+              key={i}
+              className="absolute rounded-[50%] blur-[24px] motion-reduce:animate-none"
+              style={{
+                top: `${c.top}%`,
+                left: "-30%",
+                width: `${c.width}px`,
+                height: `${c.height}px`,
+                opacity: c.opacity,
+                backgroundColor: "#fff",
+                mixBlendMode: "screen",
+                animation: `weather-cloud-drift ${c.duration}s linear infinite`,
+                animationDelay: `${c.delay}s`,
+              }}
+            />
+          ))}
+        </div>
+      )}
 
       {condition === "비" && (
         <div className="absolute inset-0 overflow-hidden">
