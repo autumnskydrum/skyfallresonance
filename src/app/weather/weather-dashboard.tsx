@@ -213,6 +213,18 @@ export function WeatherDashboard({
       <WeatherFx condition={visualCondition} />
 
       <div className="relative z-[3] mx-auto max-w-[900px] px-5 pt-4 pb-8 sm:px-8 sm:pt-6 sm:pb-12">
+        {/* 콘텐츠 열 자신의 좌상단에 고정 픽셀로 앵커한다(퍼센트 위치를 페이지 전체 배경 높이
+            기준으로 계산하던 이전 버전은 총 콘텐츠 높이가 화면 높이와 크게 다른 기기에서 엉뚱한
+            자리에 나타났다 — weather-fx.tsx 주석 참고). z-[-1]로 SKYFALL 텍스트 뒤에 깔린다. */}
+        {visualCondition === "맑음" && (
+          <div
+            className="pointer-events-none absolute -left-10 -top-10 z-[-1] h-[220px] w-[220px] animate-[weather-sun-pulse_6s_ease-in-out_infinite] rounded-full motion-reduce:animate-none sm:h-[420px] sm:w-[420px]"
+            style={{
+              backgroundImage: "radial-gradient(circle, rgba(255,196,72,.65) 0%, rgba(255,196,72,0) 70%)",
+              mixBlendMode: "screen",
+            }}
+          />
+        )}
         <div className="flex items-center justify-between text-[13px] opacity-85">
           <span style={{ ...displayFontStyle, fontWeight: 700, fontSize: 20, letterSpacing: "-0.01em" }}>
             SKYFALL

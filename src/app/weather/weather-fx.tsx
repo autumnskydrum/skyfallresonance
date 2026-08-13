@@ -294,18 +294,11 @@ export function WeatherFx({ condition }: { condition: VisualCondition }) {
         className="absolute inset-0 block h-full w-full [transform:translateZ(0)] [will-change:transform]"
       />
 
-      {condition === "맑음" && (
-        // 420px 원은 데스크톱 900px 폭 기준 크기라 좁은 모바일 화면(콘텐츠 폭 ~350px)에서는
-        // 화면 대부분을 뒤덮으며 넘쳐, 좌상단이 아니라 화면 오른쪽 중앙 쪽으로 삐져나온 것처럼
-        // 보였다 — 모바일에서는 절반 크기로 줄인다.
-        <div
-          className="absolute left-[20%] top-[10%] h-[220px] w-[220px] animate-[weather-sun-pulse_6s_ease-in-out_infinite] rounded-full motion-reduce:animate-none sm:h-[420px] sm:w-[420px]"
-          style={{
-            backgroundImage: "radial-gradient(circle, rgba(255,196,72,.65) 0%, rgba(255,196,72,0) 70%)",
-            mixBlendMode: "screen",
-          }}
-        />
-      )}
+      {/* 맑음의 해 글로우는 weather-dashboard.tsx의 콘텐츠 열(max-w-[900px]) 안에서 그린다 —
+          여기(WeatherFx)는 페이지 전체 배경 높이에 걸쳐 있어서, 퍼센트 위치가 그 전체 높이 기준으로
+          계산돼 모바일처럼 총 콘텐츠 높이가 화면 높이와 많이 다른 기기에서 엉뚱한 자리(우측 중앙,
+          온도 정중앙 등)에 나타났다. 콘텐츠 열의 실제 좌상단에 고정 픽셀로 붙이면 화면 크기와
+          무관하게 항상 같은 자리에 나온다. */}
 
       {condition === "폭염" && (
         <div
