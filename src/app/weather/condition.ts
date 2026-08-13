@@ -73,9 +73,12 @@ export function backgroundForCondition(visual: VisualCondition): string {
       // 따뜻한 주황 글로우를 얹는다. 예전 회전 광선(rays)과 달리 정적이라 눈에 거슬리지 않는다.
       // 갤럭시 날씨 위젯 참고 — 파스텔에 가까운 옅은 상단색이 오히려 "회색 낀 칙칙함"으로
       // 읽혀서, 채도를 확 올린 비비드한 하늘색 계열로 바꿨다.
+      // ellipse(기본값 farthest-corner)는 뷰포트 가로세로 비율에 따라 반지름이 달라져서, 좁은
+      // 폰 화면에서는 가장자리가 금방 어두워져 버렸다 — 화면 크기와 무관하게 항상 같은 정도로
+      // 퍼지도록 고정 크기의 circle로 바꾸고, 어두워지는 지점도 45%->68%로 밀어냈다.
       return (
         "radial-gradient(circle 420px at 50% 8%, rgba(255,196,72,.65) 0%, rgba(255,196,72,0) 70%), " +
-        "radial-gradient(ellipse at 50% -10%, #5cd0f5 0%, #1e93d6 45%, #0a4a86 100%)"
+        "radial-gradient(circle 1400px at 50% -10%, #5cd0f5 0%, #1e93d6 68%, #0a4a86 100%)"
       );
     case "구름많음":
       return "linear-gradient(180deg, #7c8a99 0%, #3f4a56 100%)";
