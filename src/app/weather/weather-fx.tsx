@@ -271,7 +271,7 @@ export function WeatherFx({ condition }: { condition: VisualCondition }) {
   }, [condition]);
 
   return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+    <div className="pointer-events-none absolute inset-0 z-[1] overflow-hidden">
       <canvas ref={rainCanvasRef} className="absolute inset-0 block h-full w-full" />
       <canvas ref={emberCanvasRef} className="absolute inset-0 block h-full w-full" />
 
@@ -281,7 +281,8 @@ export function WeatherFx({ condition }: { condition: VisualCondition }) {
           style={{
             backgroundImage:
               "repeating-conic-gradient(from 0deg, #fff2cf 0deg 3deg, transparent 3deg 20deg)",
-            opacity: 0.55,
+            // 원래 시안의 0.55는 맑음 배경 위에서 너무 쨍하고 글자가 안 보인다는 피드백으로 낮춤.
+            opacity: 0.22,
             WebkitMaskImage: "radial-gradient(circle, #000 0%, #000 30%, transparent 68%)",
             maskImage: "radial-gradient(circle, #000 0%, #000 30%, transparent 68%)",
           }}

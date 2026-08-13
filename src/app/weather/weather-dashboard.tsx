@@ -217,6 +217,17 @@ export function WeatherDashboard({
     >
       <WeatherFx condition={visualCondition} />
 
+      {/* 헤드라인 대비 확보용 비네트 — 맑음 배경이 너무 밝아 흰 글씨가 안 보인다는 피드백으로
+          추가. 눈(밝은 배경 + 어두운 글씨)만 반대로 대비를 깎으므로 제외한다. */}
+      {visualCondition !== "눈" && (
+        <div
+          className="pointer-events-none absolute inset-0 z-[2]"
+          style={{
+            background: "radial-gradient(ellipse 640px 420px at 50% 8%, rgba(0,0,0,.32), transparent 70%)",
+          }}
+        />
+      )}
+
       <div className="relative z-[3] mx-auto max-w-[900px] px-5 py-8 sm:px-8 sm:py-12">
         <div className="flex items-center justify-between text-[13px] opacity-85">
           <span style={{ ...displayFontStyle, fontWeight: 700, fontSize: 20, letterSpacing: "-0.01em" }}>
