@@ -106,7 +106,12 @@ function makeSeededRandom(seed: number) {
 
 const STAR_POSITIONS = (() => {
   const rand = makeSeededRandom(42);
-  return Array.from({ length: 90 }, () => ({ x: rand() * 100, y: rand() * 60, o: 0.4 + rand() * 0.6 }));
+  return Array.from({ length: 90 }, () => ({
+    x: rand() * 100,
+    y: rand() * 60,
+    duration: 1.6 + rand() * 2.8,
+    delay: -rand() * 4, // 음수 delay로 마운트 시점부터 각자 다른 위상에서 시작 — 다 같이 반짝이지 않는다.
+  }));
 })();
 
 const RAIN_PARTICLES = (() => {
@@ -206,13 +211,26 @@ export function WeatherFx({ condition }: { condition: VisualCondition }) {
       )}
 
       {condition === "폭염" && (
-        <div
-          className="absolute left-1/2 top-[34%] h-[320px] w-[320px] animate-[weather-heat-pulse_3.2s_ease-in-out_infinite] rounded-full blur-[2px] motion-reduce:animate-none sm:h-[640px] sm:w-[640px]"
-          style={{
-            backgroundImage: "radial-gradient(circle, #ff5a1f 0%, transparent 70%)",
-            opacity: 0.6,
-          }}
-        />
+        <>
+          <div
+            className="absolute left-1/2 top-[34%] h-[320px] w-[320px] animate-[weather-heat-pulse_3.2s_ease-in-out_infinite] rounded-full blur-[2px] motion-reduce:animate-none sm:h-[640px] sm:w-[640px]"
+            style={{
+              backgroundImage: "radial-gradient(circle, #ff5a1f 0%, transparent 70%)",
+              opacity: 0.6,
+            }}
+          />
+          {/* 배경 전체가 아지랑이처럼 일렁이는 느낌 — 서로 다른 위치/주기로 떠다니는 흐릿한 열기
+              덩어리 두 개를 screen으로 겹친다. 한 덩어리(heat-pulse)만으로는 "제자리에서 커졌다
+              작아지는" 느낌이라 "일렁인다"는 요청에는 이쪽이 더 맞는다. */}
+          <div
+            className="absolute left-[15%] top-[55%] h-[260px] w-[260px] animate-[weather-heat-shimmer_7s_ease-in-out_infinite] rounded-full blur-[10px] motion-reduce:animate-none"
+            style={{ backgroundImage: "radial-gradient(circle, #ff8a3d 0%, transparent 70%)", mixBlendMode: "screen" }}
+          />
+          <div
+            className="absolute left-[80%] top-[65%] h-[220px] w-[220px] animate-[weather-heat-shimmer_9s_ease-in-out_infinite] rounded-full blur-[10px] motion-reduce:animate-none [animation-delay:-4s]"
+            style={{ backgroundImage: "radial-gradient(circle, #ffb066 0%, transparent 70%)", mixBlendMode: "screen" }}
+          />
+        </>
       )}
 
       {condition === "밤" && (
@@ -220,8 +238,13 @@ export function WeatherFx({ condition }: { condition: VisualCondition }) {
           {STAR_POSITIONS.map((s, i) => (
             <span
               key={i}
-              className="absolute h-[2px] w-[2px] rounded-full bg-white"
-              style={{ left: `${s.x}%`, top: `${s.y}%`, opacity: s.o }}
+              className="absolute h-[2px] w-[2px] rounded-full bg-white motion-reduce:animate-none"
+              style={{
+                left: `${s.x}%`,
+                top: `${s.y}%`,
+                animation: `weather-star-twinkle ${s.duration}s ease-in-out infinite`,
+                animationDelay: `${s.delay}s`,
+              }}
             />
           ))}
         </div>

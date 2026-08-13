@@ -78,3 +78,27 @@ body {
     transform: translateX(0);
   }
 }
+
+@keyframes weather-star-twinkle {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* 폭염 배경이 아지랑이처럼 일렁이는 열기 덩어리 — 제자리에서 커졌다 작아지기만 하는
+   weather-heat-pulse와 달리 위치 자체가 떠다닌다. */
+@keyframes weather-heat-shimmer {
+  0%,
+  100% {
+    transform: translate(-10%, 0) scale(1);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translate(10%, -8%) scale(1.25);
+    opacity: 0.6;
+  }
+}
