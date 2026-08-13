@@ -6,7 +6,6 @@ import { sourceLabel } from "@/lib/weather/sources";
 import { cineBody, cineDisplay, cineKr, cineMono } from "./fonts";
 import {
   backgroundForCondition,
-  brandColorForCondition,
   conditionLine,
   localHour,
   resolveVisualCondition,
@@ -156,8 +155,9 @@ export function WeatherDashboard({
     // 실측이 아니라 근사치이므로 실제 실시간 값이 있으면 그걸 우선한다. 다른 날/시각은 항상 예보값.
     const isNowSelected = isViewingToday && selectedHour === nowKey;
     const readings = isNowSelected ? currentReadings : byHour.get(selectedHour) ?? [];
+    // "지금"도 다른 시간과 마찬가지로 온도 위에 시각을 보여준다 — 실측값이라 "예보"라고는 안 쓴다.
     const title = isNowSelected
-      ? null
+      ? `${hourLabel(now.toISOString(), timeZone)} 실시간`
       : isViewingToday
         ? `${hourLabel(selectedHour, timeZone)} 예보`
         : `${monthDayLabel(selectedDay)}(${weekdayShort(selectedDay)}) ${hourLabel(selectedHour, timeZone)} 예보`;
@@ -166,7 +166,12 @@ export function WeatherDashboard({
       : localHour(timeZone, new Date(selectedHour));
     hero = buildPointHero(readings, title, cityName, hourForVisual);
   } else if (isViewingToday) {
-    hero = buildPointHero(currentReadings, null, cityName, localHour(timeZone, now));
+    hero = buildPointHero(
+      currentReadings,
+      `${hourLabel(now.toISOString(), timeZone)} 실시간`,
+      cityName,
+      localHour(timeZone, now)
+    );
   } else {
     const rows = byDate.get(selectedDay);
     if (rows) {
@@ -207,17 +212,9 @@ export function WeatherDashboard({
     >
       <WeatherFx condition={visualCondition} />
 
-      <div className="relative z-[3] mx-auto max-w-[900px] px-5 py-8 sm:px-8 sm:py-12">
+      <div className="relative z-[3] mx-auto max-w-[900px] px-5 pt-4 pb-8 sm:px-8 sm:pt-6 sm:pb-12">
         <div className="flex items-center justify-between text-[13px] opacity-85">
-          <span
-            style={{
-              ...displayFontStyle,
-              fontWeight: 700,
-              fontSize: 20,
-              letterSpacing: "-0.01em",
-              color: brandColorForCondition(visualCondition),
-            }}
-          >
+          <span style={{ ...displayFontStyle, fontWeight: 700, fontSize: 20, letterSpacing: "-0.01em" }}>
             SKYFALL
           </span>
           <span>
@@ -226,7 +223,7 @@ export function WeatherDashboard({
         </div>
 
         {hero && (
-          <div className="mt-12 sm:mt-14">
+          <div className="mt-6 sm:mt-8">
             {/* 소스가 4개 이상이면 온도 아래에서 줄바꿈이 일어나 가독성이 떨어진다는 피드백으로,
                 넓은 화면에서는 온도 오른쪽에 세로 리스트로 뺐다. 좁은 화면(모바일)은 옆에 붙일
                 공간이 없어 아래로 쌓는다. */}

@@ -101,10 +101,3 @@ export function backgroundForCondition(visual: VisualCondition): string {
 export function textColorForCondition(visual: VisualCondition): string {
   return visual === "눈" ? "#1a2530" : "#eef4f7";
 }
-
-// SKYFALL 브랜드 표기 전용 색 — 맑음만 좌상단에 밝은 해 글로우가 있어 기본 밝은 글자색이
-// 묻히므로 하늘의 짙은 파랑으로 대비를 준다. 나머지 조건은 undefined를 반환해 일반 텍스트
-// 색(textColorForCondition)을 그대로 상속받는다.
-export function brandColorForCondition(visual: VisualCondition): string | undefined {
-  return visual === "맑음" ? "#0d3a5c" : undefined;
-}

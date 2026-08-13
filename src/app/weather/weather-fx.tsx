@@ -282,12 +282,24 @@ export function WeatherFx({ condition }: { condition: VisualCondition }) {
 
   return (
     <div ref={rootRef} className="pointer-events-none absolute inset-0 z-[1] overflow-hidden">
-      <canvas ref={rainCanvasRef} className="absolute inset-0 block h-full w-full" />
-      <canvas ref={emberCanvasRef} className="absolute inset-0 block h-full w-full" />
+      {/* transform/will-change: 캔버스가 blend-mode·blur를 쓰는 형제 엘리먼트와 같은 합성 레이어를
+          공유하면 일부 모바일 브라우저가 그 레이어의 리페인트를 건너뛰어 첫 프레임에서 멈춘 것처럼
+          보이는 경우가 있다 — 각 캔버스를 강제로 자기 GPU 레이어로 승격시켜 피한다. */}
+      <canvas
+        ref={rainCanvasRef}
+        className="absolute inset-0 block h-full w-full [transform:translateZ(0)] [will-change:transform]"
+      />
+      <canvas
+        ref={emberCanvasRef}
+        className="absolute inset-0 block h-full w-full [transform:translateZ(0)] [will-change:transform]"
+      />
 
       {condition === "맑음" && (
+        // 420px 원은 데스크톱 900px 폭 기준 크기라 좁은 모바일 화면(콘텐츠 폭 ~350px)에서는
+        // 화면 대부분을 뒤덮으며 넘쳐, 좌상단이 아니라 화면 오른쪽 중앙 쪽으로 삐져나온 것처럼
+        // 보였다 — 모바일에서는 절반 크기로 줄인다.
         <div
-          className="absolute left-[20%] top-[10%] h-[420px] w-[420px] animate-[weather-sun-pulse_6s_ease-in-out_infinite] rounded-full motion-reduce:animate-none"
+          className="absolute left-[20%] top-[10%] h-[220px] w-[220px] animate-[weather-sun-pulse_6s_ease-in-out_infinite] rounded-full motion-reduce:animate-none sm:h-[420px] sm:w-[420px]"
           style={{
             backgroundImage: "radial-gradient(circle, rgba(255,196,72,.65) 0%, rgba(255,196,72,0) 70%)",
             mixBlendMode: "screen",
@@ -297,7 +309,7 @@ export function WeatherFx({ condition }: { condition: VisualCondition }) {
 
       {condition === "폭염" && (
         <div
-          className="absolute left-1/2 top-[34%] h-[640px] w-[640px] animate-[weather-heat-pulse_3.2s_ease-in-out_infinite] rounded-full blur-[2px] motion-reduce:animate-none"
+          className="absolute left-1/2 top-[34%] h-[320px] w-[320px] animate-[weather-heat-pulse_3.2s_ease-in-out_infinite] rounded-full blur-[2px] motion-reduce:animate-none sm:h-[640px] sm:w-[640px]"
           style={{
             backgroundImage: "radial-gradient(circle, #ff5a1f 0%, transparent 70%)",
             opacity: 0.6,
