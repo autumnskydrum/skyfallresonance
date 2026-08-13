@@ -6,6 +6,7 @@ import { sourceLabel } from "@/lib/weather/sources";
 import { cineBody, cineDisplay, cineKr, cineMono } from "./fonts";
 import {
   backgroundForCondition,
+  brandColorForCondition,
   conditionLine,
   localHour,
   resolveVisualCondition,
@@ -47,6 +48,36 @@ type HeroData = {
   readouts: { source: string; value: string }[];
   visual: VisualCondition;
 };
+
+// 특정 시각(지금 또는 고른 시간)의 히어로를 만든다 — 실측(currentReadings)과 시간별 예보
+// (byHour 버킷) 둘 다 같은 Reading[] 모양이라 한 곳에서 처리한다. 날짜 단위 요약(최고/최저,
+// 특정 시각 없음)은 모양이 달라 별도로 처리한다.
+function buildPointHero(
+  readings: Reading[],
+  title: string | null,
+  cityName: string,
+  hourForVisual: number
+): HeroData | null {
+  if (readings.length === 0) return null;
+  const temps = readings.map((r) => r.temperatureC);
+  const avg = temps.reduce((sum, t) => sum + t, 0) / temps.length;
+  const min = Math.min(...temps);
+  const max = Math.max(...temps);
+  const rawCondition = readings.find((r) => r.condition)?.condition ?? null;
+  const visual = resolveVisualCondition({ condition: rawCondition, temperatureC: avg, hour: hourForVisual });
+  return {
+    temp: avg,
+    tempSecondary: null,
+    title,
+    conditionText: conditionLine(cityName, visual),
+    rangeLine: `${min.toFixed(1)}° – ${max.toFixed(1)}°C 관측 범위 · 소스 ${readings.length}개`,
+    readouts: readings.map((r) => ({
+      source: r.source,
+      value: `${r.temperatureC.toFixed(1)}°${r.condition ? ` · ${r.condition}` : ""}`,
+    })),
+    visual,
+  };
+}
 
 // 현재 날씨 카드, 시간별 스트립, 이번주 예보를 한 컴포넌트로 묶은 이유: 요일을 클릭하면 시간별
 // 스트립이 그날 것으로 바뀌고 맨 위 요약(히어로)도 그날/그 시각의 예보로 바뀌어야 해서 세 영역이
@@ -125,58 +156,17 @@ export function WeatherDashboard({
     // 실측이 아니라 근사치이므로 실제 실시간 값이 있으면 그걸 우선한다. 다른 날/시각은 항상 예보값.
     const isNowSelected = isViewingToday && selectedHour === nowKey;
     const readings = isNowSelected ? currentReadings : byHour.get(selectedHour) ?? [];
-    if (readings.length > 0) {
-      const temps = readings.map((r) => r.temperatureC);
-      const avg = temps.reduce((sum, t) => sum + t, 0) / temps.length;
-      const min = Math.min(...temps);
-      const max = Math.max(...temps);
-      const rawCondition = readings.find((r) => r.condition)?.condition ?? null;
-      const hourForVisual = isNowSelected
-        ? localHour(timeZone, now)
-        : localHour(timeZone, new Date(selectedHour));
-      const visual = resolveVisualCondition({ condition: rawCondition, temperatureC: avg, hour: hourForVisual });
-      hero = {
-        temp: avg,
-        tempSecondary: null,
-        title: isNowSelected
-          ? null
-          : isViewingToday
-            ? `${hourLabel(selectedHour, timeZone)} 예보`
-            : `${monthDayLabel(selectedDay)}(${weekdayShort(selectedDay)}) ${hourLabel(selectedHour, timeZone)} 예보`,
-        conditionText: conditionLine(cityName, visual),
-        rangeLine: `${min.toFixed(1)}° – ${max.toFixed(1)}°C 관측 범위 · 소스 ${readings.length}개`,
-        readouts: readings.map((r) => ({
-          source: r.source,
-          value: `${r.temperatureC.toFixed(1)}°${r.condition ? ` · ${r.condition}` : ""}`,
-        })),
-        visual,
-      };
-    }
+    const title = isNowSelected
+      ? null
+      : isViewingToday
+        ? `${hourLabel(selectedHour, timeZone)} 예보`
+        : `${monthDayLabel(selectedDay)}(${weekdayShort(selectedDay)}) ${hourLabel(selectedHour, timeZone)} 예보`;
+    const hourForVisual = isNowSelected
+      ? localHour(timeZone, now)
+      : localHour(timeZone, new Date(selectedHour));
+    hero = buildPointHero(readings, title, cityName, hourForVisual);
   } else if (isViewingToday) {
-    if (currentReadings.length > 0) {
-      const temps = currentReadings.map((r) => r.temperatureC);
-      const avg = temps.reduce((sum, t) => sum + t, 0) / temps.length;
-      const min = Math.min(...temps);
-      const max = Math.max(...temps);
-      const rawCondition = currentReadings.find((r) => r.condition)?.condition ?? null;
-      const visual = resolveVisualCondition({
-        condition: rawCondition,
-        temperatureC: avg,
-        hour: localHour(timeZone, now),
-      });
-      hero = {
-        temp: avg,
-        tempSecondary: null,
-        title: null,
-        conditionText: conditionLine(cityName, visual),
-        rangeLine: `${min.toFixed(1)}° – ${max.toFixed(1)}°C 관측 범위 · 소스 ${currentReadings.length}개`,
-        readouts: currentReadings.map((r) => ({
-          source: r.source,
-          value: `${r.temperatureC.toFixed(1)}°${r.condition ? ` · ${r.condition}` : ""}`,
-        })),
-        visual,
-      };
-    }
+    hero = buildPointHero(currentReadings, null, cityName, localHour(timeZone, now));
   } else {
     const rows = byDate.get(selectedDay);
     if (rows) {
@@ -210,10 +200,6 @@ export function WeatherDashboard({
       className={`${cineDisplay.variable} ${cineBody.variable} ${cineMono.variable} ${cineKr.variable} relative flex-1 overflow-hidden transition-[background] duration-1000 ease-in-out`}
       style={{
         background: backgroundForCondition(visualCondition),
-        // 맑음의 해 글로우(주황) + 하늘(파랑) 두 레이어를 기본 알파 합성으로 겹치면 보색이라
-        // 올리브빛 회색으로 탁해진다 — screen으로 섞으면 물감이 아니라 빛처럼 밝게 겹쳐진다.
-        // 단일 레이어인 다른 조건에는 영향 없다.
-        backgroundBlendMode: "screen",
         color: textColorForCondition(visualCondition),
         fontFamily: "var(--font-cine-body), var(--font-cine-kr), sans-serif",
       }}
@@ -223,7 +209,15 @@ export function WeatherDashboard({
 
       <div className="relative z-[3] mx-auto max-w-[900px] px-5 py-8 sm:px-8 sm:py-12">
         <div className="flex items-center justify-between text-[13px] opacity-85">
-          <span style={{ ...displayFontStyle, fontWeight: 700, fontSize: 20, letterSpacing: "-0.01em" }}>
+          <span
+            style={{
+              ...displayFontStyle,
+              fontWeight: 700,
+              fontSize: 20,
+              letterSpacing: "-0.01em",
+              color: brandColorForCondition(visualCondition),
+            }}
+          >
             SKYFALL
           </span>
           <span>

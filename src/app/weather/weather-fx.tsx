@@ -237,6 +237,7 @@ function seededStars(count: number) {
 const STAR_POSITIONS = seededStars(90);
 
 export function WeatherFx({ condition }: { condition: VisualCondition }) {
+  const rootRef = useRef<HTMLDivElement>(null);
   const rainCanvasRef = useRef<HTMLCanvasElement>(null);
   const emberCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -263,17 +264,36 @@ export function WeatherFx({ condition }: { condition: VisualCondition }) {
       emberEngine?.resize();
     }
     window.addEventListener("resize", handleResize);
+
+    // 창 크기는 그대로인데 폰트 로딩이 늦게 끝나 히어로 높이가 뒤늦게 바뀌는 경우(모바일 네트워크가
+    // 느릴 때 특히 잘 드러난다) resize 이벤트가 안 뜨는데, 그 타이밍에 캔버스를 이미 잘못된(보통
+    // 0에 가까운) 크기로 재놓으면 그 뒤로 다시 맞춰지지 않아 비/눈이 안 보이는 것처럼 보였다.
+    // ResizeObserver는 원인과 무관하게 실제 레이아웃 크기가 바뀔 때마다 잡아준다.
+    const resizeObserver = new ResizeObserver(handleResize);
+    if (rootRef.current) resizeObserver.observe(rootRef.current);
+
     return () => {
       window.removeEventListener("resize", handleResize);
+      resizeObserver.disconnect();
       fallingEngine?.stop();
       emberEngine?.stop();
     };
   }, [condition]);
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-[1] overflow-hidden">
+    <div ref={rootRef} className="pointer-events-none absolute inset-0 z-[1] overflow-hidden">
       <canvas ref={rainCanvasRef} className="absolute inset-0 block h-full w-full" />
       <canvas ref={emberCanvasRef} className="absolute inset-0 block h-full w-full" />
+
+      {condition === "맑음" && (
+        <div
+          className="absolute left-[20%] top-[10%] h-[420px] w-[420px] animate-[weather-sun-pulse_6s_ease-in-out_infinite] rounded-full motion-reduce:animate-none"
+          style={{
+            backgroundImage: "radial-gradient(circle, rgba(255,196,72,.65) 0%, rgba(255,196,72,0) 70%)",
+            mixBlendMode: "screen",
+          }}
+        />
+      )}
 
       {condition === "폭염" && (
         <div

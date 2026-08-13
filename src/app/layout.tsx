@@ -27,12 +27,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col bg-zinc-50 dark:bg-black">
         <header className="border-b border-black/[.08] dark:border-white/[.145]">
-          <nav className="mx-auto flex max-w-3xl items-center gap-6 px-6 py-4 text-sm font-medium">
-            <Link href="/" className="font-semibold">
+          <nav className="mx-auto flex max-w-3xl items-center gap-4 overflow-x-auto px-6 py-4 text-sm font-medium sm:gap-6">
+            <Link href="/" className="shrink-0 font-semibold">
               skyfallresonance
             </Link>
             {NAV_ITEMS.map((item) => (
-              <Link key={item.href} href={item.href}>
+              <Link key={item.href} href={item.href} className="shrink-0">
                 {item.title}
               </Link>
             ))}

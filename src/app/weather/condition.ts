@@ -68,41 +68,43 @@ export function conditionLine(cityName: string, visual: VisualCondition): string
 // 모든 조건이 공유하는 배경 기법: 화면 상단 중앙에서 빛나다가 가장자리로 갈수록 어두워지는
 // 고정 크기 circle. ellipse+farthest-corner(기본값)는 뷰포트 가로세로 비율에 따라 반지름이
 // 달라져서 폰처럼 좁은 화면에서 가장자리가 금방 어두워져 버렸던 문제가 있어 고정 px로 통일했다.
-// midStop을 늦게(기본 76%) 잡아 어두워지는 지점을 화면 가장자리 쪽으로 최대한 밀어냈다.
+// midStop을 늦게(기본 84%) 잡아 어두워지는 지점을 화면 가장자리 쪽으로 최대한 밀어냈다.
 function radialSky(top: string, mid: string, edge: string, opts?: { size?: number; midStop?: number }): string {
-  const size = opts?.size ?? 1700;
-  const midStop = opts?.midStop ?? 76;
+  const size = opts?.size ?? 2200;
+  const midStop = opts?.midStop ?? 84;
   return `radial-gradient(circle ${size}px at 50% -10%, ${top} 0%, ${mid} ${midStop}%, ${edge} 100%)`;
 }
 
 export function backgroundForCondition(visual: VisualCondition): string {
   switch (visual) {
+    // 해 글로우는 weather-fx.tsx에서 별도 DOM으로 그린다(펄스 애니메이션을 넣으려면 배경
+    // 문자열이 아니라 독립된 엘리먼트여야 transform으로 크기만 움직일 수 있다).
     case "맑음":
-      // 하늘 자체는 파란색(옅은 하늘색 → 진한 파랑)으로 두고, 해가 있을 법한 상단 중앙에만
-      // 따뜻한 주황 글로우를 얹는다. screen 블렌드로 겹쳐 보색끼리 섞여 탁해지는 걸 막는다
-      // (weather-dashboard.tsx의 backgroundBlendMode 참고). 예전 회전 광선(rays)과 달리
-      // 정적이라 눈에 거슬리지 않는다.
-      return (
-        "radial-gradient(circle 420px at 50% 8%, rgba(255,196,72,.65) 0%, rgba(255,196,72,0) 70%), " +
-        radialSky("#5cd0f5", "#1e93d6", "#0a4a86")
-      );
+      return radialSky("#5cd0f5", "#1e93d6", "#1f5f94");
     case "구름많음":
-      return radialSky("#9aa8b5", "#7c8a99", "#3f4a56");
+      return radialSky("#9aa8b5", "#7c8a99", "#55606d");
     case "비":
-      return radialSky("#4f6478", "#384a5c", "#131c26");
+      return radialSky("#4f6478", "#384a5c", "#25313f");
     case "눈":
       // 다른 조건과 반대로 중심이 밝을수록 좋다(어두운 글씨 대비) — 그래도 같은 기법으로
       // 통일해 가장자리에서만 살짝 차가운 회색으로 가라앉게 했다.
-      return radialSky("#eef5fa", "#c3d3e0", "#8b99a8");
+      return radialSky("#eef5fa", "#c3d3e0", "#94a1af");
     case "밤":
       // 별이 도드라져야 하니 다른 조건만큼 밝히지 않고, 중심도 은은한 달빛 정도로만 띄운다.
-      return radialSky("#16233d", "#0a1220", "#060b16", { midStop: 60 });
+      return radialSky("#16233d", "#0a1220", "#0d1826", { midStop: 68 });
     case "폭염":
-      return radialSky("#ffb066", "#c8451f", "#440f08");
+      return radialSky("#ffb066", "#c8451f", "#6b2211");
   }
 }
 
 // 눈 배경만 밝아서 원래 시안대로 글자색을 어둡게 뒤집는다.
 export function textColorForCondition(visual: VisualCondition): string {
   return visual === "눈" ? "#1a2530" : "#eef4f7";
+}
+
+// SKYFALL 브랜드 표기 전용 색 — 맑음만 좌상단에 밝은 해 글로우가 있어 기본 밝은 글자색이
+// 묻히므로 하늘의 짙은 파랑으로 대비를 준다. 나머지 조건은 undefined를 반환해 일반 텍스트
+// 색(textColorForCondition)을 그대로 상속받는다.
+export function brandColorForCondition(visual: VisualCondition): string | undefined {
+  return visual === "맑음" ? "#0d3a5c" : undefined;
 }
