@@ -68,9 +68,13 @@ export function conditionLine(cityName: string, visual: VisualCondition): string
 export function backgroundForCondition(visual: VisualCondition): string {
   switch (visual) {
     case "맑음":
-      // 원래 시안의 크림색→틸 조합이 탁하고 칙칙해 보인다는 피드백으로, 실제 맑은 하늘에 가까운
-      // 하늘색 계열(옅은 하늘색 → 진한 파랑)로 바꿨다.
-      return "radial-gradient(ellipse at 50% -10%, #b3e0f7 0%, #3f96d1 45%, #123a5e 100%)";
+      // 하늘색 계열로 바꾸면서 태양광 느낌의 주황색 글로우까지 같이 빠졌던 걸 되돌린다 — 하늘
+      // 자체는 파란색(옅은 하늘색 → 진한 파랑)으로 두고, 그 위에 해가 있을 법한 상단 중앙에만
+      // 따뜻한 주황 글로우를 얹는다. 예전 회전 광선(rays)과 달리 정적이라 눈에 거슬리지 않는다.
+      return (
+        "radial-gradient(circle 420px at 50% 8%, rgba(255,193,110,.6) 0%, rgba(255,193,110,0) 72%), " +
+        "radial-gradient(ellipse at 50% -10%, #cdeefd 0%, #4fb0e8 45%, #1c4f7a 100%)"
+      );
     case "구름많음":
       return "linear-gradient(180deg, #7c8a99 0%, #3f4a56 100%)";
     case "비":
