@@ -24,3 +24,14 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* 날씨 화면(시네마틱 시안)의 폭염 heat-glow 펄스 전용 — 다른 곳에서는 쓰이지 않는다. */
+@keyframes weather-heat-pulse {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.12);
+  }
+}

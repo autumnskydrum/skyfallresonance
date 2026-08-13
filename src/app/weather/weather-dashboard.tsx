@@ -1,9 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { CARD_CLASS } from "@/components/page";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { weekDateKeys } from "@/lib/weather/aggregate";
 import { sourceLabel } from "@/lib/weather/sources";
+import { cineBody, cineDisplay, cineKr, cineMono } from "./fonts";
+import {
+  backgroundForCondition,
+  conditionLine,
+  localHour,
+  resolveVisualCondition,
+  textColorForCondition,
+  type VisualCondition,
+} from "./condition";
+import { WeatherFx } from "./weather-fx";
 
 type Reading = { source: string; temperatureC: number; condition: string | null };
 type HourlyRow = {
@@ -20,15 +29,37 @@ type DailyRow = {
   condition: string | null;
 };
 
+const displayFontStyle: CSSProperties = {
+  fontFamily: "var(--font-cine-display), var(--font-cine-kr), sans-serif",
+};
+const monoFontStyle: CSSProperties = {
+  fontFamily: "var(--font-cine-mono), var(--font-cine-kr), monospace",
+};
+
+const GLASS_CLASS = "rounded-[20px] border border-white/[.22] bg-white/[.12] backdrop-blur-[10px]";
+
+type HeroData = {
+  temp: number;
+  tempSecondary: number | null;
+  title: string | null;
+  conditionText: string;
+  rangeLine: string;
+  readouts: { source: string; value: string }[];
+  visual: VisualCondition;
+};
+
 // 현재 날씨 카드, 시간별 스트립, 이번주 예보를 한 컴포넌트로 묶은 이유: 요일을 클릭하면 시간별
-// 스트립이 그날 것으로 바뀌고 맨 위 요약 카드도 그날/그 시각의 예보로 바뀌어야 해서 세 영역이
-// 선택 상태(selectedDay, selectedHour)를 공유해야 한다.
+// 스트립이 그날 것으로 바뀌고 맨 위 요약(히어로)도 그날/그 시각의 예보로 바뀌어야 해서 세 영역이
+// 선택 상태(selectedDay, selectedHour)를 공유해야 한다. 배경도 같은 이유로 "지금 보고 있는" 시각/
+// 날짜의 조건에 반응한다 — 오늘 "지금"을 볼 땐 실시간 배경, 다른 날/시각을 고르면 그때 예보로 바뀐다.
 export function WeatherDashboard({
+  cityName,
   currentReadings,
   hourlyForecasts,
   dailyForecasts,
   timeZone,
 }: {
+  cityName: string;
   currentReadings: Reading[];
   hourlyForecasts: HourlyRow[];
   dailyForecasts: DailyRow[];
@@ -88,224 +119,251 @@ export function WeatherDashboard({
     setSelectedHour((prev) => (prev === key ? null : key));
   }
 
-  let summary: React.ReactNode = null;
+  let hero: HeroData | null = null;
   if (selectedHour !== null) {
     // "지금" 시간대를 고르면 실측 현재값(currentReadings)을 보여준다 — 시간별 예보의 "지금" 버킷은
     // 실측이 아니라 근사치이므로 실제 실시간 값이 있으면 그걸 우선한다. 다른 날/시각은 항상 예보값.
     const isNowSelected = isViewingToday && selectedHour === nowKey;
     const readings = isNowSelected ? currentReadings : byHour.get(selectedHour) ?? [];
-    const title = isNowSelected
-      ? null
-      : isViewingToday
-        ? `${hourLabel(selectedHour, timeZone)} 예보`
-        : `${monthDayLabel(selectedDay)}(${weekdayShort(selectedDay)}) ${hourLabel(selectedHour, timeZone)} 예보`;
-    if (readings.length > 0) summary = <SummaryCard readings={readings} title={title} />;
+    if (readings.length > 0) {
+      const temps = readings.map((r) => r.temperatureC);
+      const avg = temps.reduce((sum, t) => sum + t, 0) / temps.length;
+      const min = Math.min(...temps);
+      const max = Math.max(...temps);
+      const rawCondition = readings.find((r) => r.condition)?.condition ?? null;
+      const hourForVisual = isNowSelected
+        ? localHour(timeZone, now)
+        : localHour(timeZone, new Date(selectedHour));
+      const visual = resolveVisualCondition({ condition: rawCondition, temperatureC: avg, hour: hourForVisual });
+      hero = {
+        temp: avg,
+        tempSecondary: null,
+        title: isNowSelected
+          ? null
+          : isViewingToday
+            ? `${hourLabel(selectedHour, timeZone)} 예보`
+            : `${monthDayLabel(selectedDay)}(${weekdayShort(selectedDay)}) ${hourLabel(selectedHour, timeZone)} 예보`,
+        conditionText: conditionLine(cityName, visual),
+        rangeLine: `${min.toFixed(1)}° – ${max.toFixed(1)}°C 관측 범위 · 소스 ${readings.length}개`,
+        readouts: readings.map((r) => ({
+          source: r.source,
+          value: `${r.temperatureC.toFixed(1)}°${r.condition ? ` · ${r.condition}` : ""}`,
+        })),
+        visual,
+      };
+    }
   } else if (isViewingToday) {
-    if (currentReadings.length > 0) summary = <SummaryCard readings={currentReadings} title={null} />;
+    if (currentReadings.length > 0) {
+      const temps = currentReadings.map((r) => r.temperatureC);
+      const avg = temps.reduce((sum, t) => sum + t, 0) / temps.length;
+      const min = Math.min(...temps);
+      const max = Math.max(...temps);
+      const rawCondition = currentReadings.find((r) => r.condition)?.condition ?? null;
+      const visual = resolveVisualCondition({
+        condition: rawCondition,
+        temperatureC: avg,
+        hour: localHour(timeZone, now),
+      });
+      hero = {
+        temp: avg,
+        tempSecondary: null,
+        title: null,
+        conditionText: conditionLine(cityName, visual),
+        rangeLine: `${min.toFixed(1)}° – ${max.toFixed(1)}°C 관측 범위 · 소스 ${currentReadings.length}개`,
+        readouts: currentReadings.map((r) => ({
+          source: r.source,
+          value: `${r.temperatureC.toFixed(1)}°${r.condition ? ` · ${r.condition}` : ""}`,
+        })),
+        visual,
+      };
+    }
   } else {
     const rows = byDate.get(selectedDay);
     if (rows) {
       const maxes = rows.map((r) => r.tempMaxC);
       const mins = rows.map((r) => r.tempMinC);
-      summary = (
-        <DailySummaryCard
-          title={`${monthDayLabel(selectedDay)}(${weekdayShort(selectedDay)}) 예보`}
-          tempMax={maxes.reduce((sum, t) => sum + t, 0) / maxes.length}
-          tempMin={mins.reduce((sum, t) => sum + t, 0) / mins.length}
-          condition={rows.find((r) => r.condition)?.condition ?? undefined}
-          bySource={rows}
-        />
-      );
+      const tempMax = maxes.reduce((sum, t) => sum + t, 0) / maxes.length;
+      const tempMin = mins.reduce((sum, t) => sum + t, 0) / mins.length;
+      const rawCondition = rows.find((r) => r.condition)?.condition ?? null;
+      // 하루 단위 요약에는 특정 시각이 없으므로 정오를 기준 시로 둔다 — "밤" 배경이 하루 전체
+      // 예보 카드에 걸리는 걸 막기 위한 선택.
+      const visual = resolveVisualCondition({ condition: rawCondition, temperatureC: tempMax, hour: 12 });
+      hero = {
+        temp: tempMax,
+        tempSecondary: tempMin,
+        title: `${monthDayLabel(selectedDay)}(${weekdayShort(selectedDay)}) 예보`,
+        conditionText: conditionLine(cityName, visual),
+        rangeLine: `소스 ${rows.length}개 평균`,
+        readouts: rows.map((r) => ({
+          source: r.source,
+          value: `${Math.round(r.tempMaxC)}° / ${Math.round(r.tempMinC)}°${r.condition ? ` · ${r.condition}` : ""}`,
+        })),
+        visual,
+      };
     }
   }
 
+  const visualCondition = hero?.visual ?? "구름많음";
+
   return (
-    <>
-      {summary}
+    <div
+      className={`${cineDisplay.variable} ${cineBody.variable} ${cineMono.variable} ${cineKr.variable} relative flex-1 overflow-hidden transition-[background] duration-1000 ease-in-out`}
+      style={{
+        background: backgroundForCondition(visualCondition),
+        color: textColorForCondition(visualCondition),
+        fontFamily: "var(--font-cine-body), var(--font-cine-kr), sans-serif",
+      }}
+      data-condition={visualCondition}
+    >
+      <WeatherFx condition={visualCondition} />
 
-      {displayedHourKeys.length > 0 && (
-        <div className={CARD_CLASS}>
-          <h2 className="border-b border-black/[.08] p-4 text-sm font-medium dark:border-white/[.145]">
-            시간별 날씨
-            {!isViewingToday && (
-              <span className="font-normal text-zinc-500 dark:text-zinc-400">
-                {" "}
-                · {monthDayLabel(selectedDay)}({weekdayShort(selectedDay)})
-              </span>
-            )}
-          </h2>
-          <ul ref={listRef} className="flex gap-3 overflow-x-auto p-4">
-            {displayedHourKeys.map((key) => {
-              const entries = byHour.get(key)!;
-              const temp = entries.reduce((sum, e) => sum + e.temperatureC, 0) / entries.length;
-              const condition = entries.find((e) => e.condition)?.condition;
-              const isNow = isViewingToday && key === nowKey;
-              // 지금 카드는 명시적으로 클릭하지 않아도(=selectedHour가 null인 기본 상태) 실시간 값을
-              // 보여주는 중이므로 선택된 것처럼 배경을 칠한다 — 글자 굵기만으로는 "포커스"가 잘 안 보인다는
-              // 피드백 반영. 다른 시간을 고르면 이 강조는 사라지고 그 시간 카드로 넘어간다.
-              const isSelected = selectedHour === key || (isNow && selectedHour === null);
-
-              return (
-                <li key={key} className="shrink-0">
-                  <button
-                    type="button"
-                    ref={isNow ? nowButtonRef : undefined}
-                    onClick={() => selectHour(key)}
-                    className={`flex flex-col items-center gap-2 rounded-lg px-3 py-2 text-center text-sm transition-colors ${
-                      isSelected
-                        ? "bg-black/[.06] dark:bg-white/[.1]"
-                        : "hover:bg-black/[.04] dark:hover:bg-white/[.06]"
-                    }`}
-                  >
-                    <span className={isNow ? "font-semibold" : "text-zinc-500 dark:text-zinc-400"}>
-                      {isNow ? "지금" : hourLabel(key, timeZone)}
-                    </span>
-                    <span className="text-2xl" aria-hidden>
-                      {weatherEmoji(condition)}
-                    </span>
-                    <span className="font-medium">{Math.round(temp)}°</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+      <div className="relative z-[3] mx-auto max-w-[900px] px-5 py-8 sm:px-8 sm:py-12">
+        <div className="flex items-center justify-between text-[13px] opacity-85">
+          <span style={{ ...displayFontStyle, fontWeight: 700, fontSize: 20, letterSpacing: "-0.01em" }}>
+            SKYFALL
+          </span>
+          <span>
+            {cityName} · {selectedHour === null && isViewingToday ? "실시간" : "예보"}
+          </span>
         </div>
-      )}
 
-      {byDate.size > 0 && (
-        <div className={CARD_CLASS}>
-          <ul className="grid grid-cols-3 divide-y divide-black/[.08] sm:grid-cols-7 sm:divide-y-0 dark:divide-white/[.145]">
-            {weekKeys.map((key) => {
-              const rows = byDate.get(key);
-              const isToday = key === todayKey;
-              const label = dayLabel(key, todayKey);
+        {hero && (
+          <div className="mt-12 text-center sm:mt-14">
+            {hero.title && <p className="mb-2 text-xs font-medium opacity-80">{hero.title}</p>}
+            <div
+              className="text-[84px] font-bold leading-[0.9] tracking-[-0.03em] [font-variant-numeric:tabular-nums] sm:text-[132px]"
+              style={{ ...displayFontStyle, textShadow: "0 8px 40px rgba(0,0,0,.25)" }}
+            >
+              {Math.round(hero.temp)}°
+              {hero.tempSecondary !== null && (
+                <span className="text-[0.5em] opacity-60"> / {Math.round(hero.tempSecondary)}°</span>
+              )}
+            </div>
+            <p className="mt-2 text-lg opacity-90 sm:text-xl">{hero.conditionText}</p>
+            <p className="mt-3 text-xs opacity-75" style={monoFontStyle}>
+              {hero.rangeLine}
+            </p>
+            {hero.readouts.length > 0 && (
+              <div
+                className="mt-4 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs opacity-85"
+                style={monoFontStyle}
+              >
+                {hero.readouts.map((r) => (
+                  <span key={r.source}>
+                    {sourceLabel(r.source)} {r.value}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
-              if (!rows) {
+        {displayedHourKeys.length > 0 && (
+          <>
+            <h2 className="mb-3.5 mt-10 text-[13px] font-semibold opacity-85">
+              오늘
+              {!isViewingToday && (
+                <span className="font-normal opacity-70">
+                  {" "}
+                  · {monthDayLabel(selectedDay)}({weekdayShort(selectedDay)})
+                </span>
+              )}
+            </h2>
+            <ul ref={listRef} className={`${GLASS_CLASS} flex gap-2 overflow-x-auto p-3.5`}>
+              {displayedHourKeys.map((key) => {
+                const entries = byHour.get(key)!;
+                const temp = entries.reduce((sum, e) => sum + e.temperatureC, 0) / entries.length;
+                const condition = entries.find((e) => e.condition)?.condition;
+                const isNow = isViewingToday && key === nowKey;
+                // 지금 카드는 명시적으로 클릭하지 않아도(=selectedHour가 null인 기본 상태) 실시간
+                // 값을 보여주는 중이므로 선택된 것처럼 배경을 칠한다.
+                const isSelected = selectedHour === key || (isNow && selectedHour === null);
+
                 return (
-                  <li
-                    key={key}
-                    className="flex flex-col items-center gap-1 p-3 text-center text-sm text-zinc-300 dark:text-zinc-700"
-                  >
-                    <span className={isToday ? "font-semibold" : ""}>{label}</span>
-                    <span className="text-2xl">–</span>
-                    <span>–</span>
+                  <li key={key} className="shrink-0">
+                    <button
+                      type="button"
+                      ref={isNow ? nowButtonRef : undefined}
+                      onClick={() => selectHour(key)}
+                      className={`flex min-w-[58px] flex-col items-center gap-2 rounded-xl px-2 py-2 text-center transition-colors ${
+                        isSelected ? "bg-white/20" : "hover:bg-white/10"
+                      }`}
+                    >
+                      <span
+                        className={`text-[11px] ${isNow ? "font-bold opacity-100" : "opacity-80"}`}
+                        style={monoFontStyle}
+                      >
+                        {isNow ? "지금" : hourLabel(key, timeZone)}
+                      </span>
+                      <span className="text-[17px]" aria-hidden>
+                        {weatherEmoji(condition)}
+                      </span>
+                      <span className="text-sm [font-variant-numeric:tabular-nums]" style={monoFontStyle}>
+                        {Math.round(temp)}°
+                      </span>
+                    </button>
                   </li>
                 );
-              }
+              })}
+            </ul>
+          </>
+        )}
 
-              const maxes = rows.map((r) => r.tempMaxC);
-              const mins = rows.map((r) => r.tempMinC);
-              const condition = rows.find((r) => r.condition)?.condition;
-              const isSelected = selectedDay === key;
+        {byDate.size > 0 && (
+          <>
+            <h2 className="mb-3.5 mt-10 text-[13px] font-semibold opacity-85">이번 주</h2>
+            <div className={`${GLASS_CLASS} grid grid-cols-4 gap-1.5 p-2.5 sm:grid-cols-7`}>
+              {weekKeys.map((key) => {
+                const rows = byDate.get(key);
+                const isToday = key === todayKey;
+                const label = dayLabel(key, todayKey);
+                const isSelected = selectedDay === key;
 
-              return (
-                <li key={key} className="p-1">
+                if (!rows) {
+                  return (
+                    <div key={key} className="flex flex-col items-center gap-1.5 p-2.5 text-center opacity-30">
+                      <span className={isToday ? "font-bold" : ""} style={monoFontStyle}>
+                        {label}
+                      </span>
+                      <span className="text-base">–</span>
+                      <span className="text-xs" style={monoFontStyle}>
+                        –
+                      </span>
+                    </div>
+                  );
+                }
+
+                const maxes = rows.map((r) => r.tempMaxC);
+                const mins = rows.map((r) => r.tempMinC);
+                const condition = rows.find((r) => r.condition)?.condition;
+
+                return (
                   <button
+                    key={key}
                     type="button"
                     onClick={() => selectDay(key)}
-                    className={`flex w-full flex-col items-center gap-1 rounded-lg p-2 text-center text-sm transition-colors ${
-                      isSelected
-                        ? "bg-black/[.06] dark:bg-white/[.1]"
-                        : "hover:bg-black/[.04] dark:hover:bg-white/[.06]"
+                    className={`flex flex-col items-center gap-1.5 rounded-2xl p-2.5 text-center transition-colors ${
+                      isSelected ? "bg-white/20" : "hover:bg-white/10"
                     }`}
                   >
-                    <span className={isToday ? "font-semibold" : "text-zinc-600 dark:text-zinc-400"}>
-                      {label}
-                    </span>
-                    <span className="text-2xl" aria-hidden>
+                    <span className={`text-xs ${isToday ? "font-bold opacity-100" : "opacity-85"}`}>{label}</span>
+                    <span className="text-base" aria-hidden>
                       {weatherEmoji(condition)}
                     </span>
-                    <span>
-                      <span className="font-semibold">
-                        {Math.round(maxes.reduce((sum, t) => sum + t, 0) / maxes.length)}°
-                      </span>
-                      <span className="text-zinc-500">
+                    <span className="text-xs" style={monoFontStyle}>
+                      {Math.round(maxes.reduce((sum, t) => sum + t, 0) / maxes.length)}°
+                      <span className="opacity-70">
                         {" "}
                         / {Math.round(mins.reduce((sum, t) => sum + t, 0) / mins.length)}°
                       </span>
                     </span>
                   </button>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      )}
-    </>
-  );
-}
-
-function SummaryCard({ readings, title }: { readings: Reading[]; title: string | null }) {
-  const temps = readings.map((r) => r.temperatureC);
-  const avg = temps.reduce((sum, t) => sum + t, 0) / temps.length;
-  const min = Math.min(...temps);
-  const max = Math.max(...temps);
-
-  return (
-    <div className={`${CARD_CLASS} p-6`}>
-      {title && (
-        <p className="mb-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">{title}</p>
-      )}
-      <div className="flex items-baseline gap-3">
-        <span className="text-5xl font-semibold">{Math.round(avg)}°C</span>
-        <span
-          className="text-xs text-zinc-500"
-          title={`${readings.length}개 소스 평균 · 최저 ${min.toFixed(1)}°C ~ 최고 ${max.toFixed(1)}°C`}
-        >
-          {min.toFixed(1)}~{max.toFixed(1)}°C · 소스 {readings.length}개 기준
-        </span>
+                );
+              })}
+            </div>
+          </>
+        )}
       </div>
-
-      <ul className="mt-5 flex flex-col gap-2 border-t border-dashed border-black/[.08] pt-4 text-sm dark:border-white/[.145]">
-        {readings.map((r) => (
-          <li key={r.source} className="flex justify-between text-zinc-600 dark:text-zinc-400">
-            <span>{sourceLabel(r.source)}</span>
-            <span>
-              {r.temperatureC.toFixed(1)}°C{r.condition ? ` · ${r.condition}` : ""}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function DailySummaryCard({
-  title,
-  tempMax,
-  tempMin,
-  condition,
-  bySource,
-}: {
-  title: string;
-  tempMax: number;
-  tempMin: number;
-  condition: string | undefined;
-  bySource: { source: string; tempMaxC: number; tempMinC: number; condition: string | null }[];
-}) {
-  return (
-    <div className={`${CARD_CLASS} p-6`}>
-      <p className="mb-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">{title}</p>
-      <div className="flex items-baseline gap-3">
-        <span className="text-5xl font-semibold">
-          {Math.round(tempMax)}°<span className="text-3xl text-zinc-400"> / {Math.round(tempMin)}°</span>
-        </span>
-        <span className="text-xs text-zinc-500">
-          {condition ? `${condition} · ` : ""}소스 {bySource.length}개 기준
-        </span>
-      </div>
-
-      <ul className="mt-5 flex flex-col gap-2 border-t border-dashed border-black/[.08] pt-4 text-sm dark:border-white/[.145]">
-        {bySource.map((r) => (
-          <li key={r.source} className="flex justify-between text-zinc-600 dark:text-zinc-400">
-            <span>{sourceLabel(r.source)}</span>
-            <span>
-              {Math.round(r.tempMaxC)}° / {Math.round(r.tempMinC)}°
-              {r.condition ? ` · ${r.condition}` : ""}
-            </span>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }
