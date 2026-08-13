@@ -6,7 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A Next.js (App Router, TypeScript, Tailwind) blog with four feature areas: a post board (게시판), Q&A (묻고 답하기), crawled-news display (주요뉴스), and a multi-source weather comparison dashboard (날씨). The electricity bill calculator from [ElectricBillCalc](../ElectricBillCalc) is planned to be folded into this workspace later — it is not here yet.
+A Next.js (App Router, TypeScript, Tailwind) blog with five feature areas: a post board (게시판), Q&A (묻고 답하기), crawled-news display (주요뉴스), a multi-source weather comparison dashboard (날씨), and a web games hub (게임, added 2026-08-14). The electricity bill calculator from [ElectricBillCalc](../ElectricBillCalc) is planned to be folded into this workspace later — it is not here yet.
+
+**Games (`/games`):** unlike the other four features, game entries are not DB-backed — `src/lib/games.ts`'s `GAMES` array is the single source of truth (a plain in-code list, not `force-dynamic`, since there's no data to go stale). `/games/page.tsx` renders a card grid (or `EmptyState` while `GAMES` is empty, which it is until the first game is built) with each card linking to `/games/<slug>`. To add a game: append an entry to `GAMES` (slug/title/description/icon) and build the actual game at `src/app/games/<slug>/page.tsx` — that per-game route doesn't exist yet for any slug, since no games exist yet to model it after.
 
 Currently only read/list views exist for all three features; there is no auth, no write UI (posting/answering), and no real crawler implementation yet. See README.md's "구현 상태" section for the current state.
 
