@@ -250,15 +250,27 @@ function physicsStep(balls: Ball[]) {
 
 // 조준선이 막힐 때까지(다른 공이나 쿠션에 닿을 때까지) 뻗어나갈 거리를 구한다 — 큐볼을 점으로,
 // 다른 공은 반지름을 2*BALL_R로 키운 원으로 취급하는 표준적인 레이캐스트 트릭.
-function castAimDistance(originX: number, originY: number, dirX: number, dirY: number, balls: Ball[]): number {
+// 조준선/예측선이 막힐 때까지(다른 공이나 쿠션에 닿을 때까지) 뻗어나갈 거리를 구한다 — 쏘는
+// 공을 점으로, 다른 공은 반지름을 2*BALL_R로 키운 원으로 취급하는 표준적인 레이캐스트 트릭.
+// 어떤 공에 먼저 맞는지도 같이 돌려준다 — "맞은 공이 어디로 갈지" 예측선을 그리려면 그 공이
+// 뭔지 알아야 한다.
+function raycastBalls(
+  originX: number,
+  originY: number,
+  dirX: number,
+  dirY: number,
+  balls: Ball[],
+  excludeNumbers: Set<number>
+): { dist: number; ball: Ball | null } {
   let maxDist = Infinity;
   if (dirX > 0) maxDist = Math.min(maxDist, (RIGHT - originX) / dirX);
   else if (dirX < 0) maxDist = Math.min(maxDist, (LEFT - originX) / dirX);
   if (dirY > 0) maxDist = Math.min(maxDist, (BOTTOM - originY) / dirY);
   else if (dirY < 0) maxDist = Math.min(maxDist, (TOP - originY) / dirY);
 
+  let hitBall: Ball | null = null;
   for (const b of balls) {
-    if (b.potted || b.type === "cue") continue;
+    if (b.potted || excludeNumbers.has(b.number)) continue;
     const lx = b.x - originX;
     const ly = b.y - originY;
     const tca = lx * dirX + ly * dirY;
@@ -268,9 +280,12 @@ function castAimDistance(originX: number, originY: number, dirX: number, dirY: n
     if (d2 > r2) continue;
     const thc = Math.sqrt(r2 - d2);
     const t0 = tca - thc;
-    if (t0 > 0 && t0 < maxDist) maxDist = t0;
+    if (t0 > 0 && t0 < maxDist) {
+      maxDist = t0;
+      hitBall = b;
+    }
   }
-  return maxDist;
+  return { dist: maxDist, ball: hitBall };
 }
 
 function drawTable(ctx: CanvasRenderingContext2D) {
@@ -346,12 +361,16 @@ export function PoolGame() {
   const shotInFlightRef = useRef(false);
   const spinRef = useRef<Spin>({ x: 0, y: 0 });
   const spinDraggingRef = useRef(false);
+  // 애니메이션 루프(마운트 시 한 번만 만들어지는 클로저)가 최신 값을 읽어야 해서 ref로 들고
+  // 있는다 — showPrediction 상태는 버튼 표시(눌린 상태 스타일)에만 쓴다.
+  const showPredictionRef = useRef(true);
 
   const [turn, setTurn] = useState<Turn>(1);
   const [groups, setGroups] = useState<Record<Turn, Group | null>>({ 1: null, 2: null });
   const [message, setMessage] = useState("플레이어 1의 차례입니다 — 큐볼을 드래그해서 치세요");
   const [gameOver, setGameOver] = useState(false);
   const [canShoot, setCanShoot] = useState(true);
+  const [showPrediction, setShowPrediction] = useState(true);
 
   // 공이 멈췄을 때 턴을 정리하는 로직 — turn/groups라는 "현재 렌더의" 상태를 그대로 참조한다.
   // 애니메이션 루프(아래)는 마운트 시 한 번만 만들어지는 클로저라 이 함수를 직접 캡처하면 항상
@@ -501,15 +520,39 @@ export function PoolGame() {
       const nx = pullDx / hyp;
       const ny = pullDy / hyp;
 
-      const aimLen = castAimDistance(cue.x, cue.y, nx, ny, ballsRef.current);
+      const firstHit = raycastBalls(cue.x, cue.y, nx, ny, ballsRef.current, new Set([0]));
       ctx.save();
       ctx.strokeStyle = "rgba(255,255,255,.85)";
       ctx.lineWidth = 2;
       ctx.setLineDash([6, 6]);
       ctx.beginPath();
       ctx.moveTo(cue.x, cue.y);
-      ctx.lineTo(cue.x + nx * aimLen, cue.y + ny * aimLen);
+      ctx.lineTo(cue.x + nx * firstHit.dist, cue.y + ny * firstHit.dist);
       ctx.stroke();
+
+      // 처음 맞은 공이 어디로 갈지 — 충돌 순간 큐볼 중심(접촉점)에서 그 공 중심을 지나는
+      // 직선 방향(스핀·마찰 없는 이상적인 충돌 가정, "고스트볼" 조준 방식과 동일한 원리).
+      if (showPredictionRef.current && firstHit.ball) {
+        const target = firstHit.ball;
+        const contactX = cue.x + nx * firstHit.dist;
+        const contactY = cue.y + ny * firstHit.dist;
+        const odx = target.x - contactX;
+        const ody = target.y - contactY;
+        const olen = Math.hypot(odx, ody);
+        if (olen > 0.001) {
+          const odirX = odx / olen;
+          const odirY = ody / olen;
+          const secondHit = raycastBalls(target.x, target.y, odirX, odirY, ballsRef.current, new Set([0, target.number]));
+          ctx.strokeStyle = "rgba(120,210,255,.85)";
+          ctx.lineWidth = 2;
+          ctx.setLineDash([4, 5]);
+          ctx.beginPath();
+          ctx.moveTo(target.x, target.y);
+          ctx.lineTo(target.x + odirX * secondHit.dist, target.y + odirY * secondHit.dist);
+          ctx.stroke();
+        }
+      }
+
       ctx.setLineDash([]);
       ctx.strokeStyle = "rgba(255,200,120,.9)";
       ctx.lineWidth = 4;
@@ -618,6 +661,17 @@ export function PoolGame() {
     spinDraggingRef.current = false;
   }
 
+  function resetSpin() {
+    spinRef.current = { x: 0, y: 0 };
+    drawSpinWidget();
+  }
+
+  function togglePrediction() {
+    const next = !showPredictionRef.current;
+    showPredictionRef.current = next;
+    setShowPrediction(next);
+  }
+
   function restart() {
     ballsRef.current = makeRack();
     turnBallsPottedRef.current = [];
@@ -632,28 +686,49 @@ export function PoolGame() {
   }
 
   return (
-    <div className="flex flex-col items-center gap-4">
+    <div className="flex flex-col items-center gap-3">
       <div className="flex w-full items-center justify-between gap-4 text-sm">
         <p className="font-medium">{message}</p>
-        <div className="flex items-center gap-3">
-          <div className="flex flex-col items-center gap-1">
-            <canvas
-              ref={spinCanvasRef}
-              width={128}
-              height={128}
-              onPointerDown={handleSpinPointerDown}
-              onPointerMove={handleSpinPointerMove}
-              onPointerUp={handleSpinPointerUp}
-              className="h-20 w-20 touch-none rounded-full shadow-inner"
-            />
-            <span className="text-xs text-zinc-500 dark:text-zinc-400">당점</span>
-          </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={togglePrediction}
+            aria-pressed={showPrediction}
+            className={`rounded-full border px-4 py-1.5 text-xs font-medium transition-colors ${
+              showPrediction
+                ? "border-transparent bg-black text-white dark:bg-white dark:text-black"
+                : "border-black/[.15] hover:bg-black/[.04] dark:border-white/[.2] dark:hover:bg-white/[.08]"
+            }`}
+          >
+            예측선 {showPrediction ? "끄기" : "켜기"}
+          </button>
           <button
             type="button"
             onClick={restart}
             className="rounded-full border border-black/[.15] px-4 py-1.5 text-xs font-medium transition-colors hover:bg-black/[.04] dark:border-white/[.2] dark:hover:bg-white/[.08]"
           >
             다시 시작
+          </button>
+        </div>
+      </div>
+      <div className="flex w-full items-center justify-end gap-2">
+        <canvas
+          ref={spinCanvasRef}
+          width={128}
+          height={128}
+          onPointerDown={handleSpinPointerDown}
+          onPointerMove={handleSpinPointerMove}
+          onPointerUp={handleSpinPointerUp}
+          className="h-20 w-20 touch-none rounded-full shadow-inner"
+        />
+        <div className="flex flex-col items-start gap-0.5">
+          <span className="text-xs text-zinc-500 dark:text-zinc-400">당점</span>
+          <button
+            type="button"
+            onClick={resetSpin}
+            className="text-[11px] text-zinc-500 underline underline-offset-2 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
+          >
+            초기화
           </button>
         </div>
       </div>
@@ -667,9 +742,10 @@ export function PoolGame() {
         className="block h-[min(82vh,880px)] max-w-[94vw] touch-none rounded-lg shadow-lg [aspect-ratio:1/2]"
       />
       <p className="max-w-[420px] text-center text-xs text-zinc-500 dark:text-zinc-400">
-        큐볼 뒤에서 원하는 방향 반대쪽으로 드래그한 뒤 놓으면 그 방향으로 칩니다. 멀리 끌수록 세게 칩니다.
-        오른쪽 위 작은 원(당점)을 눌러 큐볼의 어느 지점을 칠지 정하면 회전을 줄 수 있어요 — 위/아래는
-        팔로우·드로우, 좌/우는 휘어지는 사이드 스핀입니다.
+        큐볼 뒤에서 원하는 방향 반대쪽으로 드래그한 뒤 놓으면 그 방향으로 칩니다. 멀리 끌수록 세게 치고,
+        당길 때 옆에 %로 힘이 표시돼요. 하늘색 점선은 처음 맞는 공이 어디로 갈지 보여주는 예측선이고,
+        위 버튼으로 껐다 켤 수 있습니다. 오른쪽 위 작은 원(당점)을 눌러 큐볼의 어느 지점을 칠지 정하면
+        회전을 줄 수 있어요 — 위/아래는 팔로우·드로우, 좌/우는 휘어지는 사이드 스핀입니다.
       </p>
     </div>
   );
