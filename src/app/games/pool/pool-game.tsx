@@ -288,6 +288,65 @@ function raycastBalls(
   return { dist: maxDist, ball: hitBall };
 }
 
+type PathPoint = { x: number; y: number };
+
+// 조준 미리보기용 실제 경로 시뮬레이션 — 직선 레이캐스트 대신 physicsStep과 똑같은 프레임별
+// 갱신식(마찰, 사이드 스핀 커브)을 그대로 밟아가며 앞으로 걸어본다. 좌우 당점(사이드 스핀)이
+// 걸려 있으면 실제 큐볼 경로가 휘어서, 직선으로만 계산하던 예전 방식은 어떤 공을 먼저 맞는지
+// 자체를 잘못 예측했다 — "예측선이 안 맞는다"는 피드백의 핵심 원인. 물리 루프를 그대로
+// 재현하면 회전이 없을 때는 자동으로 직선과 똑같아지고, 있을 때도 실제와 일치한다.
+function simulateCuePath(
+  startX: number,
+  startY: number,
+  dirX: number,
+  dirY: number,
+  speed: number,
+  spinX: number,
+  balls: Ball[]
+): { path: PathPoint[]; hitBall: Ball | null; hitX: number; hitY: number } {
+  let x = startX;
+  let y = startY;
+  let vx = dirX * speed;
+  let vy = dirY * speed;
+  let spin = spinX;
+  const path: PathPoint[] = [{ x, y }];
+  let hitBall: Ball | null = null;
+
+  for (let i = 0; i < 500; i++) {
+    const curSpeed = Math.hypot(vx, vy);
+    if (curSpeed < STOP_SPEED) break;
+
+    if (spin !== 0) {
+      const dx = vx / curSpeed;
+      const dy = vy / curSpeed;
+      vx += -dy * spin * SIDE_SPIN_CURVE;
+      vy += dx * spin * SIDE_SPIN_CURVE;
+      spin *= SIDE_SPIN_DECAY;
+      if (Math.abs(spin) < 0.01) spin = 0;
+    }
+
+    x += vx;
+    y += vy;
+    vx *= FRICTION;
+    vy *= FRICTION;
+    path.push({ x, y });
+
+    if (x < LEFT || x > RIGHT || y < TOP || y > BOTTOM) break;
+
+    for (const b of balls) {
+      if (b.potted || b.number === 0) continue;
+      if (Math.hypot(x - b.x, y - b.y) < BALL_R * 2) {
+        hitBall = b;
+        break;
+      }
+    }
+    if (hitBall) break;
+  }
+
+  const last = path[path.length - 1];
+  return { path, hitBall, hitX: last.x, hitY: last.y };
+}
+
 function drawTable(ctx: CanvasRenderingContext2D) {
   ctx.clearRect(0, 0, TABLE_W, TABLE_H);
   ctx.fillStyle = "#3a2417";
@@ -520,24 +579,25 @@ export function PoolGame() {
       const nx = pullDx / hyp;
       const ny = pullDy / hyp;
 
-      const firstHit = raycastBalls(cue.x, cue.y, nx, ny, ballsRef.current, new Set([0]));
+      // 사이드 스핀이 걸려 있으면 실제 큐볼 경로가 휘므로, 직선이 아니라 실제 물리와 같은
+      // 방식으로 앞으로 걸어본 시뮬레이션 경로를 그린다 — 회전이 없으면 자동으로 직선이 된다.
+      const sim = simulateCuePath(cue.x, cue.y, nx, ny, pullDist * POWER_SCALE, spinRef.current.x, ballsRef.current);
       ctx.save();
       ctx.strokeStyle = "rgba(255,255,255,.85)";
       ctx.lineWidth = 2;
       ctx.setLineDash([6, 6]);
       ctx.beginPath();
-      ctx.moveTo(cue.x, cue.y);
-      ctx.lineTo(cue.x + nx * firstHit.dist, cue.y + ny * firstHit.dist);
+      ctx.moveTo(sim.path[0].x, sim.path[0].y);
+      for (let i = 1; i < sim.path.length; i++) ctx.lineTo(sim.path[i].x, sim.path[i].y);
       ctx.stroke();
 
-      // 처음 맞은 공이 어디로 갈지 — 충돌 순간 큐볼 중심(접촉점)에서 그 공 중심을 지나는
-      // 직선 방향(스핀·마찰 없는 이상적인 충돌 가정, "고스트볼" 조준 방식과 동일한 원리).
-      if (showPredictionRef.current && firstHit.ball) {
-        const target = firstHit.ball;
-        const contactX = cue.x + nx * firstHit.dist;
-        const contactY = cue.y + ny * firstHit.dist;
-        const odx = target.x - contactX;
-        const ody = target.y - contactY;
+      // 처음 맞은 공이 어디로 갈지 — 충돌 순간 큐볼 중심(시뮬레이션이 찾아낸 실제 접촉점)에서
+      // 그 공 중심을 지나는 직선 방향(스핀 없는 이상적인 충돌 가정, "고스트볼" 조준 방식과
+      // 동일한 원리 — 맞는 공의 방향 자체는 여전히 직선 근사다, 첫 접촉 지점만 정확해졌다).
+      if (showPredictionRef.current && sim.hitBall) {
+        const target = sim.hitBall;
+        const odx = target.x - sim.hitX;
+        const ody = target.y - sim.hitY;
         const olen = Math.hypot(odx, ody);
         if (olen > 0.001) {
           const odirX = odx / olen;
